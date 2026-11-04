@@ -17,3 +17,8 @@ backend/config/company.yaml
 .DS_Store
 .idea/
 .vscode/
+
+# Docker / runtime data
+.env
+data/
+*.db

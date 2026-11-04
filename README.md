@@ -13,9 +13,46 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
 > werden. Die App ist dafür gedacht, die *eigenen* Rechnungen umzuwandeln.
 > Fragen zur Pflicht und zur Archivierung (GoBD) bitte mit der Steuerberatung klären.
 
-## Schnellstart
+## Betrieb mit Docker Compose (empfohlen)
 
-Voraussetzungen: Python ≥ 3.11, Node ≥ 20, pnpm.
+Jeder Teil läuft in einem eigenen Container:
+
+| Dienst | Aufgabe | Von außen erreichbar |
+|---|---|---|
+| `frontend` | nginx: Weboberfläche + Weiterleitung von `/api` | ja, Port 8080 |
+| `backend` | FastAPI (Erkennung, Prüfung, Export) | nein |
+| `worker` | überwacht den SAP-IDoc-Eingangsordner, wandelt automatisch um | nein, ohne Internet |
+| `db` | PostgreSQL: Archiv aller erzeugten E-Rechnungen | nein |
+
+Netzwerke: `web` (frontend ↔ backend) und `data` (backend, worker, db; intern,
+ohne Internetzugang). Die Oberfläche kann die Datenbank also nicht direkt erreichen.
+
+```bash
+cp .env.example .env            # Passwort für die Datenbank setzen
+mkdir -p data/idoc && sudo chown -R 10001 data/idoc   # Container läuft als UID 10001
+docker compose up -d --build
+# -> http://localhost:8080
+```
+
+Eigene Firmendaten: `backend/config/company.yaml` anlegen (siehe unten). Der
+Ordner wird schreibgeschützt in Backend und Worker eingebunden.
+
+**SAP-Eingang:** ECC legt INVOIC02-Dateien in `data/idoc/inbox/` ab (Pfad über
+`IDOC_HOST_DIR` änderbar, z. B. eine Netzwerkfreigabe). Der Worker erzeugt die
+E-Rechnung in `outbox/`, verschiebt das IDoc nach `processed/` bzw. bei Fehlern
+nach `error/` (mit `.error.txt` daneben) und archiviert jede Rechnung in der
+Datenbank. Format über `IDOC_PROFILE` (`zugferd` oder `xrechnung`).
+
+```bash
+docker compose ps                 # Status aller Dienste
+docker compose logs -f worker     # was der Worker gerade macht
+docker compose down               # stoppen (Daten bleiben im Volume pgdata)
+```
+
+## Lokale Entwicklung ohne Docker
+
+Voraussetzungen: Python ≥ 3.11, Node ≥ 20, pnpm. Ohne `DATABASE_URL` nutzt das
+Backend eine lokale SQLite-Datei (`backend/erechnung.db`).
 
 ```bash
 # Backend (Port 8000)
@@ -64,8 +101,8 @@ Der Weg: ECC gibt pro Faktura ein **INVOIC02-IDoc als XML-Datei** aus
 kein SAP-SDK, kein RFC-Benutzer und kein Netzwerkzugriff auf SAP nötig.
 
 - Manueller Import: die `.xml`-Datei in der Oberfläche hochladen.
-- Automatischer Import: `SapEccIdocFolderAdapter` (Ordner-Eingang) ist vorhanden,
-  ein Hintergrundjob dafür folgt in der nächsten Ausbaustufe.
+- Automatischer Import: der `worker`-Dienst überwacht den Eingangsordner
+  (siehe „Betrieb mit Docker Compose“).
 - Die Zuordnung von Segmenten und Qualifiern steht in `MAPPING` in
   `backend/app/erp/sap_ecc_idoc.py`. **Bitte mit einem echten IDoc aus eurem
   System abgleichen** (WE02). Kundenspezifische Anpassungen sind bei ECC üblich.
@@ -84,8 +121,12 @@ backend/
   app/export/zugferd.py     XML in PDF einbetten (factur-x) + XSD-Prüfung
   app/export/pdf_render.py  Einfaches Rechnungs-PDF, wenn kein Quell-PDF existiert
   app/validation.py         Pflichtfeld-, IBAN- und Summenprüfung
+  app/convert.py            Prüfen + Datei erzeugen (gemeinsam für API und Worker)
+  app/db.py                 Archiv (PostgreSQL / SQLite) mit SQLAlchemy
+  app/worker.py             SAP-IDoc-Eingangsordner -> E-Rechnungen
   app/main.py               FastAPI-Endpunkte
-frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export)
+frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export, Archiv)
+compose.yaml                frontend, backend, worker, db
 samples/                    Beispiel-PDF und Beispiel-IDoc
 scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 ```
@@ -95,9 +136,11 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [x] Grundgerüst, Rechnungsmodell, PDF-Upload mit regelbasierter Erkennung, Prüfformular
 - [x] Export ZUGFeRD (EN 16931) und XRechnung 3.0 (CII) inkl. XSD-Prüfung
 - [x] SAP ECC: INVOIC02-IDoc einlesen (Upload + Ordner-Adapter)
+- [x] Docker Compose: getrennte Dienste, Archiv in PostgreSQL, Worker für den IDoc-Eingang
 - [ ] Offizielle Prüfung mit dem **KoSIT-Validator** (Schematron, Java) einbinden
 - [ ] Echte **PDF/A-3**-Umwandlung (Ghostscript) + Prüfung mit veraPDF
-- [ ] Hintergrundjob: IDoc-Eingangsordner überwachen, automatisch umwandeln und ablegen bzw. versenden
+- [ ] Versand der E-Rechnungen (E-Mail / PEPPOL) direkt aus dem Worker
+- [ ] Datenbank-Migrationen (Alembic) vor der ersten Schemaänderung
 - [ ] Texterkennung (OCR) für eingescannte PDFs
 - [ ] Rabatte und Zuschläge (Allowances/Charges), Teilzahlungen, Skonto
-- [ ] Anmeldung, Mandanten, Archivierung
+- [ ] Anmeldung, Mandanten; GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)

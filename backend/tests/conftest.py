@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
+# Tests use a throwaway SQLite database (set before the app is imported).
+os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp(prefix='erechnung-test-')}/test.db"
+
 from datetime import date
 from decimal import Decimal
 
