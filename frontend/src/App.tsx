@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, exportInvoice, extractPdf, importIdoc, validateInvoice } from "./api";
+import { Archive } from "./Archive";
 import { InvoiceForm, setPath } from "./InvoiceForm";
 import type { Invoice, Profile, StatedTotals, ValidateResponse } from "./types";
 
@@ -34,6 +35,7 @@ export function App() {
   const [check, setCheck] = useState<ValidateResponse | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [archiveKey, setArchiveKey] = useState(0);
 
   // Re-validate (debounced) whenever the invoice or profile changes.
   useEffect(() => {
@@ -83,9 +85,15 @@ export function App() {
     setErrors([]);
     setBusy(true);
     try {
-      const blob = await exportInvoice(invoice, profile, source?.kind === "pdf" ? source.file : null);
+      const blob = await exportInvoice(
+        invoice,
+        profile,
+        source?.kind === "pdf" ? source.file : null,
+        { kind: source?.kind ?? "manual", name: source?.file.name ?? "" },
+      );
       const base = invoice.number.replace(/[^\w-]/g, "_") || "rechnung";
       download(blob, profile === "xrechnung" ? `${base}_xrechnung.xml` : `${base}_zugferd.pdf`);
+      setArchiveKey((k) => k + 1);
     } catch (e) {
       setErrors(describe(e));
     } finally {
@@ -216,6 +224,8 @@ export function App() {
           </aside>
         </main>
       )}
+
+      <Archive refreshKey={archiveKey} />
     </div>
   );
 }

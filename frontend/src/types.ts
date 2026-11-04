@@ -103,3 +103,16 @@ export interface ValidateResponse {
   totals: Totals;
   issues: Issue[];
 }
+
+export interface ArchivedDocument {
+  id: number;
+  created_at: string;
+  source: string;
+  source_name: string;
+  profile: Profile;
+  invoice_number: string;
+  buyer_name: string;
+  grand_total: string;
+  currency: string;
+  filename: string;
+}

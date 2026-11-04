@@ -6,7 +6,7 @@ comments and identifiers are English.
 
 ## Stack (do not deviate without asking)
 
-- Backend: Python ≥ 3.11, FastAPI, pydantic v2, pdfplumber, lxml, factur-x, reportlab. Tests: pytest.
+- Backend: Python ≥ 3.11, FastAPI, pydantic v2, SQLAlchemy 2 (PostgreSQL via psycopg 3), pdfplumber, lxml, factur-x, reportlab. Tests: pytest.
 - Frontend: React 18 + Vite + TypeScript (strict), pnpm. Plain CSS, no UI framework.
 
 ## Architecture (keep these)
@@ -24,8 +24,15 @@ comments and identifiers are English.
    SAP field mapping lives in one `MAPPING` dict.
 5. **Own company = seller**, from `backend/config/company.yaml` (git-ignored;
    `company.example.yaml` is the template). Master data wins over document data.
-6. **The API is stateless.** The client holds invoice + source PDF between calls.
-7. **Export only when valid**: export endpoints re-run validation and return 422
+6. **The API is stateless while editing.** The client holds invoice + source PDF
+   between calls; only finished exports are persisted (`app/db.py`, table
+   `documents`). `app/convert.py` is the single validate-then-build path used by
+   both the API and the IDoc worker.
+7. **Deployment is Docker Compose** (`compose.yaml`): frontend (nginx, only
+   published port), backend, worker (same image, `python -m app.worker`), db
+   (PostgreSQL). Network `data` is internal: worker and db have no internet.
+   Locally without Docker the backend falls back to SQLite.
+8. **Export only when valid**: export endpoints re-run validation and return 422
    with the issues. CII element order follows the XSD — check `check_xsd` after
    any change in `export/cii.py`.
 
@@ -38,5 +45,5 @@ cd frontend && pnpm typecheck && pnpm build
 
 ## Not yet (see README roadmap)
 
-KoSIT Schematron validation, strict PDF/A-3 conversion, background job for the
-IDoc inbox, OCR, allowances/charges, auth/multi-tenancy.
+KoSIT Schematron validation, strict PDF/A-3 conversion, sending (e-mail/PEPPOL),
+Alembic migrations, OCR, allowances/charges, auth/multi-tenancy.

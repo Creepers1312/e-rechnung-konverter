@@ -1,4 +1,4 @@
-import type { ExtractionResult, Invoice, Profile, StatedTotals, ValidateResponse } from "./types";
+import type { ArchivedDocument, ExtractionResult, Invoice, Profile, StatedTotals, ValidateResponse } from "./types";
 
 export class ApiError extends Error {
   constructor(message: string, public details: string[] = []) {
@@ -57,10 +57,16 @@ export async function validateInvoice(
   return res.json();
 }
 
-export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: File | null): Promise<Blob> {
+export interface ExportSource {
+  kind: "pdf" | "idoc" | "manual";
+  name: string;
+}
+
+export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: File | null, source: ExportSource): Promise<Blob> {
   if (profile === "xrechnung") {
+    const qs = new URLSearchParams({ source: source.kind, source_name: source.name });
     const res = await check(
-      await fetch("/api/export/xrechnung", {
+      await fetch(`/api/export/xrechnung?${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(invoice),
@@ -70,7 +76,18 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
   }
   const form = new FormData();
   form.append("invoice", JSON.stringify(invoice));
+  form.append("source", source.kind);
+  form.append("source_name", source.name);
   if (pdf) form.append("file", pdf);
   const res = await check(await fetch("/api/export/zugferd", { method: "POST", body: form }));
   return res.blob();
+}
+
+export async function listDocuments(): Promise<ArchivedDocument[]> {
+  const res = await check(await fetch("/api/documents"));
+  return res.json();
+}
+
+export function documentUrl(id: number): string {
+  return `/api/documents/${id}/download`;
 }

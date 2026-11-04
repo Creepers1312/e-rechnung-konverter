@@ -62,3 +62,23 @@ def test_idoc_import_and_zugferd_without_source_pdf() -> None:
     assert r.status_code == 200, r.text
     _, xml = facturx.get_xml_from_pdf(r.content)
     assert b"0090001234" in xml
+
+
+def test_exports_are_archived_and_downloadable(invoice: Invoice) -> None:
+    r = client.post(
+        "/api/export/zugferd",
+        data={"invoice": invoice.model_dump_json(), "source": "pdf", "source_name": "kunde.pdf"},
+    )
+    assert r.status_code == 200, r.text
+    doc_id = int(r.headers["X-Document-Id"])
+
+    listing = client.get("/api/documents").json()
+    entry = next(d for d in listing if d["id"] == doc_id)
+    assert entry["invoice_number"] == "RE-2026-0042"
+    assert entry["source_name"] == "kunde.pdf"
+    assert entry["grand_total"] == "1244.59"
+
+    r = client.get(f"/api/documents/{doc_id}/download")
+    assert r.status_code == 200
+    assert r.content[:4] == b"%PDF"
+    assert client.get("/api/documents/999999/download").status_code == 404

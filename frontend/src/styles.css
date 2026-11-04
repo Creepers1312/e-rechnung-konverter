@@ -102,3 +102,7 @@ input, select {
 .issues li.warning { color: var(--warn); }
 .issues code { font-size: 0.75rem; opacity: 0.8; }
 .lines select { min-width: 110px; }
+.archive { margin-top: 20px; }
+.archive th.right, .archive td.right { text-align: right; font-variant-numeric: tabular-nums; }
+.archive td { padding: 6px 4px; font-size: 0.9rem; border-top: 1px solid var(--border); }
+.archive a { color: var(--accent); }
