@@ -1,0 +1,25 @@
+# Example layout template. Copy this file per invoice layout that the generic
+# rules do not handle well. Only list what differs from _generic.yaml.
+#
+# `match.any`: the template is used when ANY of these strings occurs in the
+# PDF text (case-insensitive). The first matching template wins (files are
+# checked in alphabetical order).
+
+id: beispiel-layout
+name: Beispiel-Layout ("Beleg-Nr." statt "Rechnungsnummer")
+
+match:
+  any:
+    - 'Beleg-Nr.'
+
+fields:
+  number: 'Beleg-Nr\.\s*:?\s*(\S+)'
+  issue_date: 'Belegdatum\s*:?\s*({DATE})'
+
+lines:
+  start: '^\s*Artikel'
+  end: '^\s*Warenwert'
+
+# fields can also be pinned to fixed values:
+# defaults:
+#   vat_rate: 7

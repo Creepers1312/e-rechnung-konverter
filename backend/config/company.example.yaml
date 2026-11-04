@@ -1,0 +1,25 @@
+# Master data of YOUR company (the invoice issuer / seller).
+# Copy to `company.yaml` (git-ignored) and fill in real values.
+# Later this data comes from SAP (company code / Buchungskreis) instead.
+
+seller:
+  name: Musterfirma GmbH
+  address:
+    line1: Musterstraße 1
+    postcode: "12345"
+    city: Musterstadt
+    country_code: DE
+  vat_id: DE123456789
+  tax_number: ""
+  electronic_address: rechnung@musterfirma.example
+  contact:
+    name: Erika Mustermann
+    phone: "+49 123 456789"
+    email: buchhaltung@musterfirma.example
+
+payment:
+  means_code: "58"   # SEPA credit transfer
+  iban: DE89370400440532013000
+  bic: COBADEFFXXX
+  account_holder: Musterfirma GmbH
+  terms: Zahlbar innerhalb von 14 Tagen ohne Abzug.
