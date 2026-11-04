@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local company master data (real values)
+backend/config/company.yaml
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

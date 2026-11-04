@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-written sample in INVOIC02 XML-file-port format (not from a real system). -->
+<INVOIC02>
+  <IDOC BEGIN="1">
+    <EDI_DC40 SEGMENT="1">
+      <TABNAM>EDI_DC40</TABNAM>
+      <DOCNUM>0000000000123456</DOCNUM>
+      <IDOCTYP>INVOIC02</IDOCTYP>
+      <MESTYP>INVOIC</MESTYP>
+    </EDI_DC40>
+    <E1EDK01 SEGMENT="1">
+      <CURCY>EUR</CURCY>
+      <BSART>INVO</BSART>
+      <EIGENUINR>DE123456789</EIGENUINR>
+      <KUNDEUINR>DE987654321</KUNDEUINR>
+    </E1EDK01>
+    <E1EDKA1 SEGMENT="1">
+      <PARVW>RS</PARVW>
+      <NAME1>Musterfirma GmbH</NAME1>
+      <STRAS>Musterstraße 1</STRAS>
+      <ORT01>Musterstadt</ORT01>
+      <PSTLZ>12345</PSTLZ>
+      <LAND1>DE</LAND1>
+    </E1EDKA1>
+    <E1EDKA1 SEGMENT="1">
+      <PARVW>RE</PARVW>
+      <PARTN>0000010042</PARTN>
+      <NAME1>Kunde AG</NAME1>
+      <NAME2>Einkauf</NAME2>
+      <STRAS>Hauptstraße 5</STRAS>
+      <ORT01>Berlin</ORT01>
+      <PSTLZ>10115</PSTLZ>
+      <LAND1>DE</LAND1>
+    </E1EDKA1>
+    <E1EDK02 SEGMENT="1">
+      <QUALF>001</QUALF>
+      <BELNR>PO-778</BELNR>
+    </E1EDK02>
+    <E1EDK02 SEGMENT="1">
+      <QUALF>009</QUALF>
+      <BELNR>0090001234</BELNR>
+      <DATUM>20261104</DATUM>
+    </E1EDK02>
+    <E1EDK03 SEGMENT="1">
+      <IDDAT>011</IDDAT>
+      <DATUM>20261031</DATUM>
+    </E1EDK03>
+    <E1EDK18 SEGMENT="1">
+      <QUALF>001</QUALF>
+      <TAGE>14</TAGE>
+      <ZTERM_TXT>Zahlbar innerhalb 14 Tagen netto</ZTERM_TXT>
+    </E1EDK18>
+    <E1EDP01 SEGMENT="1">
+      <POSEX>000010</POSEX>
+      <MENGE>3</MENGE>
+      <MENEE>ST</MENEE>
+      <E1EDP26 SEGMENT="1">
+        <QUALF>003</QUALF>
+        <BETRG>100.00</BETRG>
+      </E1EDP26>
+      <E1EDP04 SEGMENT="1">
+        <MWSKZ>A1</MWSKZ>
+        <MSATZ>19.000</MSATZ>
+        <MWSBT>19.00</MWSBT>
+      </E1EDP04>
+      <E1EDP19 SEGMENT="1">
+        <QUALF>002</QUALF>
+        <IDTNR>MAT-4711</IDTNR>
+        <KTEXT>Wartungspaket</KTEXT>
+      </E1EDP19>
+    </E1EDP01>
+    <E1EDP01 SEGMENT="1">
+      <POSEX>000020</POSEX>
+      <MENGE>2.5</MENGE>
+      <MENEE>H</MENEE>
+      <E1EDP26 SEGMENT="1">
+        <QUALF>003</QUALF>
+        <BETRG>237.50</BETRG>
+      </E1EDP26>
+      <E1EDP04 SEGMENT="1">
+        <MWSKZ>A1</MWSKZ>
+        <MSATZ>19.000</MSATZ>
+      </E1EDP04>
+      <E1EDP19 SEGMENT="1">
+        <QUALF>002</QUALF>
+        <IDTNR>SRV-01</IDTNR>
+        <KTEXT>Techniker vor Ort</KTEXT>
+      </E1EDP19>
+    </E1EDP01>
+  </IDOC>
+</INVOIC02>

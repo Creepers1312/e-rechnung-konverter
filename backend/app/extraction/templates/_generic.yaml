@@ -1,0 +1,59 @@
+# Generic rules for German invoices. Used for every PDF; a matching layout
+# template (any other *.yaml in this folder) is merged on top of it, so a
+# template only needs to list what differs.
+#
+# Placeholders usable inside patterns:
+#   {AMOUNT}  German amount, e.g. 1.234,56
+#   {DATE}    German date, e.g. 04.11.2026 or 04.11.26
+# The first non-empty capture group of a field pattern is the value, so
+# alternatives like '(a)|(b)' are fine.
+# Patterns are case-insensitive and searched in the full PDF text.
+
+id: _generic
+name: Allgemeine Regeln (deutsche Rechnungen)
+
+fields:
+  number: 'Rechnungs?[- ]?(?:nummer|nr\.?)\s*:?\s*([A-Z0-9][A-Z0-9\-/_.]*)'
+  issue_date: 'Rechnungsdatum\s*:?\s*({DATE})'
+  delivery_date: '(?:Liefer|Leistungs)(?:datum|zeitpunkt)\s*:?\s*({DATE})'
+  due_date: '(?:fällig|zahlbar)\s+(?:am|bis(?:\s+zum)?)\s*:?\s*({DATE})'
+  order_reference: '(?:Bestell(?:nummer|nr\.?)|Ihre\s+Bestellung)\s*:?\s*([A-Z0-9][A-Z0-9\-/_.]*)'
+  buyer_reference: 'Leitweg-?ID\s*:?\s*([0-9A-Z][0-9A-Z\-]+)'
+  buyer_erp_id: 'Kunden[- ]?(?:nummer|nr\.?)\s*:?\s*([A-Z0-9][A-Z0-9\-]*)'
+  buyer_vat_id: '(?:Ihre|Kunden)[- ]?USt\.?-?Id(?:Nr\.?|ent)?\s*:?\s*([A-Z]{2}\s?[0-9A-Z]{8,12})'
+  buyer_email: 'Rechnungs-?E-?Mail\s*:?\s*(\S+@\S+)'
+  terms: '((?:Zahlbar|Zahlungsziel|Zahlungsbedingung)[^\n]*)'
+  vat_rate: '(\d{1,2}(?:,\d+)?)\s*%\s*(?:MwSt|USt|Umsatzsteuer|Mehrwertsteuer)|(?:MwSt|USt|Umsatzsteuer|Mehrwertsteuer)\.?\s*(\d{1,2}(?:,\d+)?)\s*%'
+  total_net: '(?:Netto(?:betrag|summe)?|Zwischensumme|Summe\s+netto|Gesamt\s+netto)\s*:?\s*({AMOUNT})'
+  total_tax: '(?:MwSt|USt|Umsatzsteuer|Mehrwertsteuer)\.?\s*(?:\d{1,2}(?:,\d+)?\s*%)?\s*:?\s*({AMOUNT})'
+  total_gross: '(?:Brutto(?:betrag|summe)?|Gesamtbetrag|Rechnungsbetrag|Endbetrag|Gesamtsumme|Zu\s+zahlen)\s*:?\s*({AMOUNT})'
+
+# Line items: searched line by line between `start` and `end` (both optional).
+# Named groups: name, quantity, unit_price, total (required); id, unit, vat_rate (optional).
+lines:
+  start: '^\s*Pos'
+  end: '^\s*(?:Netto|Zwischensumme|Summe|Gesamt)'
+  pattern: '^(?:(?P<id>\d{1,3})\s+)?(?P<name>.+?)\s+(?P<quantity>\d+(?:,\d+)?)\s*(?P<unit>Stk\.?|Stück|St\.|Std\.?|h|kg|m|l|Pauschal|psch\.?|x)?\s+(?P<unit_price>{AMOUNT})\s*(?:€|EUR)?\s+(?:(?P<vat_rate>\d{1,2})\s*%\s+)?(?P<total>{AMOUNT})\s*(?:€|EUR)?$'
+
+# Map printed units to UN/ECE Rec 20 codes (case-insensitive, trailing dot ignored).
+units:
+  stk: H87
+  stück: H87
+  st: H87
+  x: H87
+  std: HUR
+  h: HUR
+  kg: KGM
+  m: MTR
+  l: LTR
+  pauschal: LS
+  psch: LS
+
+# Buyer address: DIN 5008 address window, in PDF points from the top-left
+# of page 1 (x0, top, x1, bottom). Lines containing the seller's name
+# (the small return-address line) are skipped.
+buyer_region: [50, 120, 300, 260]
+
+defaults:
+  vat_rate: 19
+  vat_category: S
