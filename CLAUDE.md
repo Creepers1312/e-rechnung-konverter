@@ -6,7 +6,7 @@ comments and identifiers are English.
 
 ## Stack (do not deviate without asking)
 
-- Backend: Python ≥ 3.11, FastAPI, pydantic v2, SQLAlchemy 2 (PostgreSQL via psycopg 3), pdfplumber, lxml, factur-x, reportlab. Tests: pytest.
+- Backend: Python ≥ 3.11, FastAPI, pydantic v2, SQLAlchemy 2 (PostgreSQL via psycopg 3), argon2-cffi, pdfplumber, lxml, factur-x, reportlab. Tests: pytest.
 - Frontend: React 18 + Vite + TypeScript (strict), pnpm. Plain CSS, no UI framework.
 
 ## Architecture (keep these)
@@ -35,6 +35,12 @@ comments and identifiers are English.
 8. **Export only when valid**: export endpoints re-run validation and return 422
    with the issues. CII element order follows the XSD — check `check_xsd` after
    any change in `export/cii.py`.
+9. **Every endpoint is behind login** (`app/auth.py`): `current_user` for
+   normal work, `require_admin` for users/settings/audit (`app/admin.py`).
+   New endpoints must take one of these dependencies; only `/api/health` and
+   `/api/auth/login` are public. Writes need the `X-Requested-With: erechnung`
+   header. Security-relevant actions go to the audit log (`db.audit`).
+   Admin-editable configuration lives in the `settings` table (`app/settings.py`).
 
 ## Commands
 
@@ -46,4 +52,4 @@ cd frontend && pnpm typecheck && pnpm build
 ## Not yet (see README roadmap)
 
 KoSIT Schematron validation, strict PDF/A-3 conversion, sending (e-mail/PEPPOL),
-Alembic migrations, OCR, allowances/charges, auth/multi-tenancy.
+Alembic migrations, OCR, allowances/charges, SSO (Entra ID), multi-tenancy.

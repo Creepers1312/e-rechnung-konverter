@@ -34,8 +34,8 @@ docker compose up -d --build
 # -> http://localhost:8080
 ```
 
-Eigene Firmendaten: `backend/config/company.yaml` anlegen (siehe unten). Der
-Ordner wird schreibgeschützt in Backend und Worker eingebunden.
+Danach mit dem Admin aus `.env` anmelden (siehe „Anmeldung & Rollen“) und unter
+**Verwaltung → Einstellungen & Konnektoren** die eigenen Firmendaten eintragen.
 
 **SAP-Eingang:** ECC legt INVOIC02-Dateien in `data/idoc/inbox/` ab (Pfad über
 `IDOC_HOST_DIR` änderbar, z. B. eine Netzwerkfreigabe). Der Worker erzeugt die
@@ -48,6 +48,44 @@ docker compose ps                 # Status aller Dienste
 docker compose logs -f worker     # was der Worker gerade macht
 docker compose down               # stoppen (Daten bleiben im Volume pgdata)
 ```
+
+## Anmeldung & Rollen
+
+Ohne Anmeldung ist nichts erreichbar (außer `/api/health`).
+
+| | Benutzer | Administrator |
+|---|---|---|
+| Rechnungen hochladen, prüfen, umwandeln | ✓ | ✓ |
+| Archiv ansehen und herunterladen (alle Rechnungen) | ✓ | ✓ |
+| Benutzer anlegen, sperren, Rolle ändern, Passwort zurücksetzen | – | ✓ |
+| Einstellungen & Konnektoren: Firmendaten, SAP-IDoc-Eingang (an/aus, Format, Intervall) | – | ✓ |
+| Protokoll (Anmeldungen, Fehlversuche, Exporte, Downloads, Änderungen) | – | ✓ |
+
+**Erster Start:** Der erste Administrator wird aus `ADMIN_USER` / `ADMIN_PASSWORD`
+(`.env`) angelegt, solange es noch keinen Benutzer gibt. Das Startpasswort muss
+bei der ersten Anmeldung geändert werden – das gilt auch für alle Benutzer, die
+ein Admin anlegt oder deren Passwort er zurücksetzt.
+
+**Notfall** (niemand kann sich mehr anmelden):
+```bash
+docker compose exec backend python -m app.manage reset-password admin
+docker compose exec backend python -m app.manage create-admin chef
+```
+
+**Sicherheit im Überblick:** Passwörter mit Argon2id gehasht (mind. 10 Zeichen);
+Sitzung per HttpOnly-/SameSite=Strict-Cookie, in der Datenbank liegt nur ein Hash
+des Tokens; Abmeldung nach `SESSION_IDLE_MINUTES` Inaktivität bzw. spätestens
+nach `SESSION_MAX_HOURS`; Sperre nach 5 Fehlversuchen für 5 Minuten; Schutz-Header
+gegen CSRF bei allen schreibenden Anfragen; der letzte aktive Admin kann sich
+nicht selbst entfernen; Sperren eines Benutzers beendet seine Sitzungen sofort.
+
+**HTTPS:** Sobald die App nicht nur lokal läuft, gehört ein HTTPS-Reverse-Proxy
+davor (z. B. vorhandener Firmen-Proxy, Caddy oder Traefik) und in `.env`
+`COOKIE_SECURE=true` – sonst gehen Passwörter unverschlüsselt durchs Netz.
+
+Die Firmendaten und Konnektor-Einstellungen werden nach dem ersten Speichern in
+der Datenbank gehalten; `company.yaml` und `IDOC_PROFILE`/`IDOC_INTERVAL` sind
+nur noch Startwerte.
 
 ## Lokale Entwicklung ohne Docker
 
@@ -124,7 +162,11 @@ backend/
   app/convert.py            Prüfen + Datei erzeugen (gemeinsam für API und Worker)
   app/db.py                 Archiv (PostgreSQL / SQLite) mit SQLAlchemy
   app/worker.py             SAP-IDoc-Eingangsordner -> E-Rechnungen
-  app/main.py               FastAPI-Endpunkte
+  app/auth.py               Anmeldung, Sitzungen, Rollen, Schutz gegen Passwort-Raten
+  app/admin.py              Endpunkte für Anmeldung und Verwaltung (/api/auth, /api/admin)
+  app/settings.py           Einstellungen aus der Datenbank (Firmendaten, SAP-Konnektor)
+  app/manage.py             Kommandozeile: Admin anlegen, Passwort zurücksetzen
+  app/main.py               FastAPI-Endpunkte (Umwandeln, Archiv)
 frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export, Archiv)
 compose.yaml                frontend, backend, worker, db
 samples/                    Beispiel-PDF und Beispiel-IDoc
@@ -143,4 +185,6 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [ ] Datenbank-Migrationen (Alembic) vor der ersten Schemaänderung
 - [ ] Texterkennung (OCR) für eingescannte PDFs
 - [ ] Rabatte und Zuschläge (Allowances/Charges), Teilzahlungen, Skonto
-- [ ] Anmeldung, Mandanten; GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)
+- [x] Anmeldung mit Rollen (Admin / Benutzer), Protokoll
+- [ ] Firmen-Login (Microsoft Entra ID / SSO), Mandanten
+- [ ] GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)
