@@ -35,7 +35,7 @@ def test_extracts_rendered_invoice(invoice: Invoice, company: Company) -> None:
     assert got.buyer.vat_id == "DE987654321"
     assert got.seller.name == company.seller.name
 
-    assert [(l.name, l.quantity, l.unit_code, l.unit_price, l.vat_rate) for l in got.lines] == [
+    assert [(line.name, line.quantity, line.unit_code, line.unit_price, line.vat_rate) for line in got.lines] == [
         ("Beratung", Decimal("8"), "HUR", Decimal("95.00"), Decimal("19")),
         ("Lizenz Software", Decimal("2"), "H87", Decimal("125.00"), Decimal("19")),
         ("Fachbuch", Decimal("1"), "H87", Decimal("39.90"), Decimal("7")),
@@ -62,18 +62,20 @@ def _simple_pdf(rows: list[str]) -> bytes:
 
 
 def test_layout_template_overrides_generic_rules(company: Company) -> None:
-    pdf = _simple_pdf([
-        "Beleg-Nr. B-77",
-        "Belegdatum 01.02.2026",
-        "Artikel Menge Preis Summe",
-        "Schrauben 100 Stk 0,10 € 10,00 €",
-        "Warenwert 10,00 €",
-    ])
+    pdf = _simple_pdf(
+        [
+            "Beleg-Nr. B-77",
+            "Belegdatum 01.02.2026",
+            "Artikel Menge Preis Summe",
+            "Schrauben 100 Stk 0,10 € 10,00 €",
+            "Warenwert 10,00 €",
+        ]
+    )
     result = extract(PdfText.from_bytes(pdf), company)
     assert result.template_id == "beispiel-layout"
     assert result.invoice.number == "B-77"
     assert result.invoice.issue_date == date(2026, 2, 1)
-    assert [l.name for l in result.invoice.lines] == ["Schrauben"]
+    assert [line.name for line in result.invoice.lines] == ["Schrauben"]
 
 
 def test_custom_template_dir(tmp_path: Path, company: Company) -> None:

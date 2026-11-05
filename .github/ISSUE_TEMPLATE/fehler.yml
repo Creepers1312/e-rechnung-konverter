@@ -1,0 +1,59 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet.
+labels: [fehler]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Bitte keine echten Rechnungen oder Kundendaten anhängen.** Daten vorher schwärzen
+        oder eine nachgebaute Beispielrechnung verwenden.
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert?
+      description: Fehlermeldung, falscher Wert, Absturz …
+    validations:
+      required: true
+  - type: textarea
+    id: erwartet
+    attributes:
+      label: Was hätte passieren sollen?
+    validations:
+      required: true
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachstellen
+      placeholder: |
+        1. Als Benutzer anmelden
+        2. PDF hochladen …
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: bereich
+    attributes:
+      label: Bereich
+      options:
+        - PDF-Erkennung
+        - Prüfung / Validierung
+        - Export ZUGFeRD
+        - Export XRechnung
+        - SAP-IDoc (Upload oder Eingangsordner)
+        - Anmeldung / Benutzerverwaltung
+        - Archiv
+        - Installation / Docker
+        - Sonstiges
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit
+      description: z. B. Commit-Hash oder Datum des letzten Updates
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Ausgabe von `docker compose logs backend worker` (ohne vertrauliche Daten)"
+      render: text

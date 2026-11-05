@@ -1,0 +1,41 @@
+name: Rechnungslayout wird schlecht erkannt
+description: Felder einer bestimmten Rechnungsvorlage werden nicht oder falsch erkannt → neue Layout-Vorlage nötig.
+labels: [vorlage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Für jedes Rechnungslayout kann eine YAML-Vorlage in
+        `backend/app/extraction/templates/` angelegt werden (siehe `beispiel-layout.yaml`).
+        **Rechnung nur geschwärzt anhängen** (Namen, Adressen, IBAN, Beträge dürfen verfälscht sein –
+        wichtig ist das Layout).
+  - type: input
+    id: absender
+    attributes:
+      label: Absender / Layout
+      description: Woran erkennt man das Layout eindeutig? (z. B. Firmenname im Kopf, "Beleg-Nr.")
+    validations:
+      required: true
+  - type: checkboxes
+    id: felder
+    attributes:
+      label: Welche Felder fehlen oder sind falsch?
+      options:
+        - label: Rechnungsnummer
+        - label: Rechnungsdatum / Lieferdatum
+        - label: Käufer (Name / Anschrift)
+        - label: Positionen
+        - label: Steuersätze
+        - label: Summen
+        - label: Zahlungsbedingungen / Fälligkeit
+        - label: Bestellnummer / Leitweg-ID
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Wie steht es auf der Rechnung, was hat die App erkannt?
+  - type: textarea
+    id: anhang
+    attributes:
+      label: Geschwärzte Beispielrechnung
+      description: PDF hier hineinziehen.

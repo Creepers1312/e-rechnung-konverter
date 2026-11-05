@@ -73,6 +73,7 @@ export interface ExtractionResult {
   template_id: string;
   template_name: string;
   warnings: string[];
+  notes: string[];
   raw_text: string;
 }
 
@@ -107,6 +108,7 @@ export interface ValidateResponse {
 export interface ArchivedDocument {
   id: number;
   created_at: string;
+  created_by: string;
   source: string;
   source_name: string;
   profile: Profile;
@@ -115,4 +117,92 @@ export interface ArchivedDocument {
   grand_total: string;
   currency: string;
   filename: string;
+}
+
+export type Role = "admin" | "user";
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  role: Role;
+  active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface Company {
+  seller: Party;
+  payment: PaymentInfo;
+}
+
+export interface IdocSettings {
+  enabled: boolean;
+  profile: Profile;
+  interval_seconds: number;
+}
+
+export interface AdminSettings {
+  company: Company;
+  idoc: IdocSettings;
+}
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  username: string;
+  action: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ImportResult {
+  invoice: Invoice;
+  notes: string[];
+}
+
+export interface DocumentPage {
+  items: ArchivedDocument[];
+  total: number;
+}
+
+export interface DocumentFilter {
+  q?: string;
+  date_from?: string;
+  date_to?: string;
+  profile?: Profile | "";
+  source?: "pdf" | "idoc" | "manual" | "";
+  offset?: number;
+  limit?: number;
+}
+
+export interface CustomerInfo {
+  id: number;
+  name: string;
+  party: Party;
+  buyer_reference: string;
+  updated_at: string;
+}
+
+export interface IdocErrorFile {
+  name: string;
+  size: number;
+  modified_at: string;
+  reason: string;
+}
+
+export interface IdocStatus {
+  folder_available: boolean;
+  worker_alive: boolean;
+  worker: {
+    last_round_at?: string;
+    enabled?: boolean;
+    profile?: Profile;
+    interval_seconds?: number;
+    converted_total?: number;
+    failed_total?: number;
+    last_converted_at?: string | null;
+    last_failed_at?: string | null;
+  };
+  counts: Record<"inbox" | "outbox" | "processed" | "error", number>;
+  errors: IdocErrorFile[];
 }

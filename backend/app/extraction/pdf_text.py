@@ -14,7 +14,7 @@ class PdfText:
     data: bytes  # raw PDF, kept so regions can be cropped lazily
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "PdfText":
+    def from_bytes(cls, data: bytes) -> PdfText:
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             text = "\n".join((page.extract_text() or "") for page in pdf.pages)
         return cls(text=text, data=data)

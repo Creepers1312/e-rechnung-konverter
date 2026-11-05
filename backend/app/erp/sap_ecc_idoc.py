@@ -36,8 +36,18 @@ MAPPING = {
     "dates": {"issue": "012", "delivery": "011"},
     "item_net_qualf": "003",  # E1EDP26 QUALF 003 = item net value
     # SAP internal units -> UN/ECE Rec 20
-    "units": {"ST": "H87", "PCE": "H87", "STK": "H87", "H": "HUR", "STD": "HUR",
-              "KG": "KGM", "M": "MTR", "L": "LTR", "LE": "C62", "PAU": "LS"},
+    "units": {
+        "ST": "H87",
+        "PCE": "H87",
+        "STK": "H87",
+        "H": "HUR",
+        "STD": "HUR",
+        "KG": "KGM",
+        "M": "MTR",
+        "L": "LTR",
+        "LE": "C62",
+        "PAU": "LS",
+    },
 }
 
 

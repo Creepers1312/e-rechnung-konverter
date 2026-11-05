@@ -22,3 +22,4 @@ backend/config/company.yaml
 .env
 data/
 *.db
+backups/

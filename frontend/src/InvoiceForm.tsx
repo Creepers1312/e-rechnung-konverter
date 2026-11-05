@@ -1,6 +1,7 @@
+import { BuyerLookup } from "./BuyerLookup";
 import type { Invoice, Issue, LineItem, Party, VatCategory } from "./types";
 
-type Update = (path: string, value: unknown) => void;
+export type Update = (path: string, value: unknown) => void;
 
 /** Immutably set `obj[a][b][c] = value` for path "a.b.c" (numeric parts index arrays). */
 export function setPath<T>(obj: T, path: string, value: unknown): T {
@@ -16,7 +17,7 @@ function hasError(issues: Issue[], path: string): Issue | undefined {
   return issues.find((i) => i.severity === "error" && i.field && (i.field === path || path.startsWith(i.field + ".")));
 }
 
-interface FieldProps {
+export interface FieldProps {
   label: string;
   path: string;
   value: string | null;
@@ -27,7 +28,7 @@ interface FieldProps {
   placeholder?: string;
 }
 
-function Field({ label, path, value, update, issues, type = "text", wide, placeholder }: FieldProps) {
+export function Field({ label, path, value, update, issues, type = "text", wide, placeholder }: FieldProps) {
   const error = hasError(issues, path);
   return (
     <label className={`field${wide ? " wide" : ""}${error ? " invalid" : ""}`} title={error?.message}>
@@ -42,8 +43,8 @@ function Field({ label, path, value, update, issues, type = "text", wide, placeh
   );
 }
 
-function PartyFields({ prefix, party, update, issues, seller }: {
-  prefix: "seller" | "buyer";
+export function PartyFields({ prefix, party, update, issues, seller }: {
+  prefix: string;
   party: Party;
   update: Update;
   issues: Issue[];
@@ -183,7 +184,10 @@ export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; upd
         </div>
       </section>
       <section>
-        <h2>Käufer</h2>
+        <div className="section-head">
+          <h2>Käufer</h2>
+          <BuyerLookup invoice={invoice} update={update} />
+        </div>
         <PartyFields prefix="buyer" party={invoice.buyer} update={update} issues={issues} />
       </section>
       <section>
