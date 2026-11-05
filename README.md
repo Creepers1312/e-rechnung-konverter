@@ -110,6 +110,7 @@ Dann http://localhost:5173 öffnen und z. B. `samples/beispielrechnung.pdf` oder
 
 ```bash
 cd backend && .venv/bin/pytest      # Backend-Tests
+cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check .   # Lint/Format
 cd frontend && pnpm typecheck       # Frontend-Typprüfung
 ```
 
@@ -172,6 +173,16 @@ compose.yaml                frontend, backend, worker, db
 samples/                    Beispiel-PDF und Beispiel-IDoc
 scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 ```
+
+## Qualitätssicherung
+
+- **CI** (`.github/workflows/ci.yml`) bei jedem Push und Pull Request: Backend-Lint und
+  -Format (ruff), Backend-Tests (pytest), Frontend-Typecheck und -Build, Docker-Build.
+- **Vorlagen:** Pull-Request-Vorlage mit Prüfliste; Issue-Vorlagen für Fehler,
+  Funktionswünsche und schlecht erkannte Rechnungslayouts.
+- **Dependabot** schlägt wöchentlich Updates für Python, npm, Docker-Images und
+  GitHub Actions vor.
+- Details zur Mitarbeit: `CONTRIBUTING.md`, Sicherheit: `SECURITY.md`.
 
 ## Roadmap
 

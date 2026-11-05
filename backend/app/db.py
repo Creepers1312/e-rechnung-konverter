@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 
@@ -44,7 +44,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
     source: Mapped[str] = mapped_column(String(20))  # "pdf" | "idoc" | "manual"
     source_name: Mapped[str] = mapped_column(String(255), default="")
     profile: Mapped[str] = mapped_column(String(20))  # "zugferd" | "xrechnung"
@@ -60,7 +60,7 @@ class Document(Base):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class User(Base):

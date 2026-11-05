@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.export.pdf_render import render_invoice_pdf
 from app.model import Invoice
+
 SAMPLE_IDOC = Path(__file__).parent / "fixtures" / "invoic02_sample.xml"
 
 
@@ -18,13 +19,18 @@ def test_extract_then_validate_then_export(client: TestClient, invoice: Invoice)
     extracted = body["invoice"]
     assert extracted["number"] == "RE-2026-0042"
 
-    r = client.post("/api/validate", json={"invoice": extracted, "profile": "zugferd", "stated_totals": body["stated_totals"]})
+    r = client.post(
+        "/api/validate", json={"invoice": extracted, "profile": "zugferd", "stated_totals": body["stated_totals"]}
+    )
     assert r.status_code == 200
     assert r.json()["totals"]["grand_total"] == "1244.59"
     assert not [i for i in r.json()["issues"] if i["severity"] == "error"]
 
-    r = client.post("/api/export/zugferd", data={"invoice": Invoice.model_validate(extracted).model_dump_json()},
-                    files={"file": ("r.pdf", pdf, "application/pdf")})
+    r = client.post(
+        "/api/export/zugferd",
+        data={"invoice": Invoice.model_validate(extracted).model_dump_json()},
+        files={"file": ("r.pdf", pdf, "application/pdf")},
+    )
     assert r.status_code == 200, r.text
     assert r.headers["content-type"] == "application/pdf"
     _, xml = facturx.get_xml_from_pdf(r.content)

@@ -51,7 +51,7 @@ class Folders:
     error: Path
 
     @classmethod
-    def under(cls, base: Path) -> "Folders":
+    def under(cls, base: Path) -> Folders:
         f = cls(base / "inbox", base / "outbox", base / "processed", base / "error")
         for p in (f.inbox, f.outbox, f.processed, f.error):
             p.mkdir(parents=True, exist_ok=True)
@@ -82,8 +82,14 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
             invoice = adapter.get_invoice(name)
             result = convert(invoice, profile)
             archive(
-                session, invoice, profile=profile, source="idoc", source_name=name,
-                filename=result.filename, media_type=result.media_type, content=result.content,
+                session,
+                invoice,
+                profile=profile,
+                source="idoc",
+                source_name=name,
+                filename=result.filename,
+                media_type=result.media_type,
+                content=result.content,
                 created_by="worker",
             )
             (folders.outbox / result.filename).write_bytes(result.content)
@@ -113,8 +119,12 @@ def main() -> None:
                 cfg = get_idoc_settings(session)
                 interval = cfg.interval_seconds
                 if last != (cfg.enabled, cfg.profile):
-                    log.info("connector %s, format=%s, every %ss",
-                             "enabled" if cfg.enabled else "DISABLED", cfg.profile, interval)
+                    log.info(
+                        "connector %s, format=%s, every %ss",
+                        "enabled" if cfg.enabled else "DISABLED",
+                        cfg.profile,
+                        interval,
+                    )
                     last = (cfg.enabled, cfg.profile)
                 if cfg.enabled:
                     process_once(folders, cfg.profile, session)

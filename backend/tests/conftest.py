@@ -39,7 +39,9 @@ def invoice(company: Company) -> Invoice:
         lines=[
             LineItem(id="1", name="Beratung", quantity=Decimal("8"), unit_code="HUR", unit_price=Decimal("95.00")),
             LineItem(id="2", name="Lizenz Software", quantity=Decimal("2"), unit_price=Decimal("125.00")),
-            LineItem(id="3", name="Fachbuch", quantity=Decimal("1"), unit_price=Decimal("39.90"), vat_rate=Decimal("7")),
+            LineItem(
+                id="3", name="Fachbuch", quantity=Decimal("1"), unit_price=Decimal("39.90"), vat_rate=Decimal("7")
+            ),
         ],
         payment=company.payment.model_copy(update={"due_date": date(2026, 11, 18)}),
     )
@@ -63,8 +65,14 @@ _ids = itertools.count(1)
 def make_user(role: str = "user", must_change_password: bool = False, password: str = PASSWORD) -> str:
     username = f"{role}{next(_ids)}"
     with sessionmaker(get_engine())() as session:
-        session.add(User(username=username, password_hash=hash_password(password), role=role,
-                         must_change_password=must_change_password))
+        session.add(
+            User(
+                username=username,
+                password_hash=hash_password(password),
+                role=role,
+                must_change_password=must_change_password,
+            )
+        )
         session.commit()
     return username
 

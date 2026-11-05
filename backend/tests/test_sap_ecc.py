@@ -27,12 +27,12 @@ def test_parse_invoic02(company: Company) -> None:
     assert inv.seller.contact.email  # own master data wins over the IDoc
     assert inv.payment.terms == "Zahlbar innerhalb 14 Tagen netto"
 
-    assert [(l.id, l.name, l.unit_code) for l in inv.lines] == [
+    assert [(line.id, line.name, line.unit_code) for line in inv.lines] == [
         ("10", "Wartungspaket", "H87"),
         ("20", "Techniker vor Ort", "HUR"),
     ]
     # 3 × 33.333333 must still give SAP's 100.00
-    assert [l.net_amount for l in inv.lines] == [Decimal("100.00"), Decimal("237.50")]
+    assert [line.net_amount for line in inv.lines] == [Decimal("100.00"), Decimal("237.50")]
     assert compute_totals(inv).grand_total == Decimal("401.63")
 
 

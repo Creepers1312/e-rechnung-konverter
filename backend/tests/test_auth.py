@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -101,7 +101,7 @@ def test_idle_session_expires(client: TestClient) -> None:
     with _db() as s:
         token_hash_rows = list(s.scalars(select(LoginSession)))
         for row in token_hash_rows:
-            row.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=5)
+            row.last_seen_at = datetime.now(UTC) - timedelta(hours=5)
         s.commit()
     assert client.get("/api/documents").status_code == 401
 
@@ -120,11 +120,16 @@ def test_initial_password_must_be_changed_first() -> None:
 
 
 def test_admin_manages_users(admin_client: TestClient) -> None:
-    r = admin_client.post("/api/admin/users", json={"username": "erika", "role": "user", "password": "start-passwort-123"})
+    r = admin_client.post(
+        "/api/admin/users", json={"username": "erika", "role": "user", "password": "start-passwort-123"}
+    )
     assert r.status_code == 201, r.text
     uid = r.json()["id"]
     assert r.json()["must_change_password"] is True
-    assert admin_client.post("/api/admin/users", json={"username": "erika", "password": "start-passwort-123"}).status_code == 409
+    assert (
+        admin_client.post("/api/admin/users", json={"username": "erika", "password": "start-passwort-123"}).status_code
+        == 409
+    )
 
     erika = login_as("erika", "start-passwort-123")
     assert erika.get("/api/auth/me").status_code == 200
@@ -132,10 +137,15 @@ def test_admin_manages_users(admin_client: TestClient) -> None:
     # deactivating ends her sessions immediately
     assert admin_client.patch(f"/api/admin/users/{uid}", json={"active": False}).json()["active"] is False
     assert erika.get("/api/auth/me").status_code == 401
-    assert new_client().post("/api/auth/login", json={"username": "erika", "password": "start-passwort-123"}).status_code == 401
+    assert (
+        new_client().post("/api/auth/login", json={"username": "erika", "password": "start-passwort-123"}).status_code
+        == 401
+    )
 
     # promote + reactivate + reset password
-    r = admin_client.patch(f"/api/admin/users/{uid}", json={"active": True, "role": "admin", "password": "noch-ein-passwort"})
+    r = admin_client.patch(
+        f"/api/admin/users/{uid}", json={"active": True, "role": "admin", "password": "noch-ein-passwort"}
+    )
     assert r.json()["role"] == "admin" and r.json()["must_change_password"] is True
 
 

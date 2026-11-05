@@ -20,7 +20,7 @@ import os
 import secrets
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from argon2 import PasswordHasher
@@ -122,7 +122,7 @@ def _token_hash(token: str) -> str:
 
 
 def _utc(dt: datetime) -> datetime:
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)  # SQLite drops tzinfo
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)  # SQLite drops tzinfo
 
 
 def login(session: Session, request: Request, response: Response, username: str, password: str) -> User:
@@ -143,7 +143,7 @@ def login(session: Session, request: Request, response: Response, username: str,
     if _hasher.check_needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
     token = secrets.token_urlsafe(32)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.add(LoginSession(token_hash=_token_hash(token), user_id=user.id, created_at=now, last_seen_at=now))
     user.last_login_at = now
     audit(session, user.username, "login", ip=client)
@@ -185,7 +185,7 @@ def _authenticate(request: Request, session: Session) -> tuple[User, LoginSessio
     if not token:
         raise HTTPException(401, "Bitte anmelden.")
     row = session.get(LoginSession, _token_hash(token))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if row is None or now - _utc(row.last_seen_at) > idle_timeout() or now - _utc(row.created_at) > max_lifetime():
         if row is not None:
             session.delete(row)
@@ -230,8 +230,10 @@ def bootstrap_admin(session: Session) -> None:
     username = os.environ.get("ADMIN_USER", "").strip()
     password = os.environ.get("ADMIN_PASSWORD", "")
     if not username or not password:
-        log.warning("Noch kein Benutzer vorhanden. ADMIN_USER und ADMIN_PASSWORD setzen oder "
-                    "'python -m app.manage create-admin <name>' ausführen.")
+        log.warning(
+            "Noch kein Benutzer vorhanden. ADMIN_USER und ADMIN_PASSWORD setzen oder "
+            "'python -m app.manage create-admin <name>' ausführen."
+        )
         return
     session.add(User(username=username, password_hash=hash_password(password), role="admin", must_change_password=True))
     audit(session, "system", "user_created", username=username, role="admin")

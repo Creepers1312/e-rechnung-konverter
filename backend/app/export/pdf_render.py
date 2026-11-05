@@ -70,7 +70,7 @@ def render_invoice_pdf(invoice: Invoice) -> bytes:
     y = height - 112 * mm
     c.setFont("Helvetica-Bold", 9)
     cols = (20, 30, 120, 140, 164, 178)
-    for x, label in zip(cols, ("Pos", "Bezeichnung", "Menge", "Einzelpreis", "USt", "Gesamt")):
+    for x, label in zip(cols, ("Pos", "Bezeichnung", "Menge", "Einzelpreis", "USt", "Gesamt"), strict=True):
         c.drawString(x * mm, y, label)
     y -= 6 * mm
     c.setFont("Helvetica", 9)

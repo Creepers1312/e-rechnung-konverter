@@ -44,8 +44,14 @@ def main(argv: list[str] | None = None) -> None:
         if args.cmd == "create-admin":
             if user is not None:
                 sys.exit(f"Benutzer '{args.username}' existiert bereits.")
-            session.add(User(username=args.username, password_hash=hash_password(_ask_password(args.username)),
-                             role="admin", must_change_password=True))
+            session.add(
+                User(
+                    username=args.username,
+                    password_hash=hash_password(_ask_password(args.username)),
+                    role="admin",
+                    must_change_password=True,
+                )
+            )
             audit(session, "cli", "user_created", username=args.username, role="admin")
         else:
             if user is None:

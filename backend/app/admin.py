@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import auth
-from .auth import Role, current_session, current_user, require_admin
+from .auth import Role, current_session, require_admin
 from .company import Company
 from .db import AuditEntry, LoginSession, User, audit, get_session, put_setting
 from .settings import IdocSettings, get_company, get_idoc_settings
@@ -132,8 +132,9 @@ def create_user(body: NewUser, admin: User = Depends(require_admin), session: Se
     if session.scalar(select(User.id).where(User.username == username)) is not None:
         raise HTTPException(409, "Diesen Benutzernamen gibt es schon.")
     auth.check_password_policy(body.password, username)
-    user = User(username=username, password_hash=auth.hash_password(body.password), role=body.role,
-                must_change_password=True)
+    user = User(
+        username=username, password_hash=auth.hash_password(body.password), role=body.role, must_change_password=True
+    )
     session.add(user)
     audit(session, admin.username, "user_created", username=username, role=body.role)
     session.commit()
@@ -180,11 +181,18 @@ def read_settings(_: User = Depends(require_admin), session: Session = Depends(g
 
 
 @router.put("/admin/settings", response_model=Settings)
-def write_settings(body: Settings, admin: User = Depends(require_admin), session: Session = Depends(get_session)) -> Settings:
+def write_settings(
+    body: Settings, admin: User = Depends(require_admin), session: Session = Depends(get_session)
+) -> Settings:
     put_setting(session, "company", body.company.model_dump(mode="json"), admin.username)
     put_setting(session, "idoc", body.idoc.model_dump(mode="json"), admin.username)
-    audit(session, admin.username, "settings_changed", idoc=body.idoc.model_dump(mode="json"),
-          company=body.company.seller.name)
+    audit(
+        session,
+        admin.username,
+        "settings_changed",
+        idoc=body.idoc.model_dump(mode="json"),
+        company=body.company.seller.name,
+    )
     session.commit()
     return body
 
@@ -195,8 +203,18 @@ def write_settings(body: Settings, admin: User = Depends(require_admin), session
 @router.get("/admin/audit", response_model=list[AuditInfo])
 def read_audit(
     limit: int = Query(200, ge=1, le=1000),
-    action: Literal["login", "login_failed", "export", "download", "user_created", "user_updated",
-                    "password_changed", "password_reset", "settings_changed"] | None = None,
+    action: Literal[
+        "login",
+        "login_failed",
+        "export",
+        "download",
+        "user_created",
+        "user_updated",
+        "password_changed",
+        "password_reset",
+        "settings_changed",
+    ]
+    | None = None,
     _: User = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> list[AuditEntry]:

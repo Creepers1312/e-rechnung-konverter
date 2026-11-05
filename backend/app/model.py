@@ -137,7 +137,7 @@ def compute_totals(invoice: Invoice) -> Totals:
         )
         for (cat, rate), basis in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1]))
     ]
-    line_total = round2(sum((l.net_amount for l in invoice.lines), Decimal("0")))
+    line_total = round2(sum((line.net_amount for line in invoice.lines), Decimal("0")))
     tax_total = round2(sum((b.amount for b in breakdown), Decimal("0")))
     grand = line_total + tax_total
     return Totals(

@@ -47,7 +47,7 @@ comments and identifiers are English.
 ## Commands
 
 ```bash
-cd backend && .venv/bin/pytest          # must stay green
+cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/pytest   # must stay green (CI)
 cd frontend && pnpm typecheck && pnpm build
 ```
 

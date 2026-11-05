@@ -96,8 +96,14 @@ def _convert_and_archive(
         ) from exc
     audit(session, user.username, "export", invoice_number=invoice.number, profile=profile)
     doc = archive(
-        session, invoice, profile=profile, source=source, source_name=source_name,
-        filename=result.filename, media_type=result.media_type, content=result.content,
+        session,
+        invoice,
+        profile=profile,
+        source=source,
+        source_name=source_name,
+        filename=result.filename,
+        media_type=result.media_type,
+        content=result.content,
         created_by=user.username,
     )
     return Response(
