@@ -9,6 +9,29 @@ Webapp, die Rechnungen in E-Rechnungen nach EN 16931 umwandelt:
 Ablauf: Datei hochladen → Felder werden regelbasiert erkannt → im Formular prüfen
 und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterladen.
 
+**Automatisierung**
+
+- **Zwei Eingangsordner:** SAP-IDocs (`data/idoc/inbox`) und PDFs (`data/pdf/inbox`, z. B.
+  von einem Scanner oder Netzlaufwerk). Der Worker liest jede Datei – **Scans per
+  Texterkennung (OCR)** –, ergänzt Käuferdaten aus dem Adressbuch, prüft sie und erzeugt
+  fehlerfreie E-Rechnungen **ohne Klick** (Archiv + `outbox/`).
+- **„Zu prüfen“:** Rechnungen, bei denen etwas fehlt (z. B. Käuferanschrift), landen in einer
+  Prüfliste in der App statt im Fehlerordner. Öffnen → ergänzen → erzeugen, danach öffnet sich
+  automatisch die nächste. Im Fehlerordner landen nur noch unlesbare Dateien.
+- Optional ohne Vollautomatik: Dann geht **jede** PDF-Rechnung zur Freigabe über „Zu prüfen“
+  (Vier-Augen-Prinzip, Verwaltung → Einstellungen).
+
+**Erkennung**
+
+- **OCR-Dienst** (eigener Container, OCRmyPDF/Tesseract, Deutsch + Englisch): gescannte PDFs
+  ohne Textebene werden automatisch erkannt; die Daten verlassen den Server nicht.
+- Kombinierte Felder („Rechnungs-Nr. / Datum“, „Lieferschein-Nr. / Datum“), Summen wie
+  „Nettosumme / MwSt. Total / Zu zahlender Gesamtbetrag“, Positionen über mehrere Zeilen,
+  Artikel-/Materialnummer (BT-155), Einheit Tonne, **Fälligkeit aus „30 Tage netto“**.
+- Mehrdeutige Mengen („23.820“ – Tausenderpunkt oder per OCR gelesenes Komma?) werden über die
+  aufgedruckten Beträge aufgelöst.
+- Warnung, wenn der Absender im PDF nicht zu den eigenen Firmendaten passt.
+
 **Komfortfunktionen**
 
 - **Stapelverarbeitung:** mehrere PDFs/IDocs auf einmal hochladen – fehlerfreie werden
@@ -87,9 +110,10 @@ Jeder Teil läuft in einem eigenen Container:
 |---|---|---|
 | `frontend` | nginx: Weboberfläche + Weiterleitung von `/api` | ja, Port 8080 |
 | `backend` | FastAPI (Erkennung, Prüfung, Export) | nein |
-| `worker` | überwacht den SAP-IDoc-Eingangsordner, wandelt automatisch um | nein, ohne Internet |
+| `worker` | überwacht SAP-IDoc- und PDF-Eingangsordner, wandelt automatisch um | nein, ohne Internet |
 | `db` | PostgreSQL: Archiv aller erzeugten E-Rechnungen | nein |
 | `backup` | tägliche Datenbanksicherung (`pg_dump`) nach `./backups` | nein, ohne Internet |
+| `ocr` | Texterkennung für gescannte PDFs (OCRmyPDF/Tesseract) | nein, ohne Internet |
 
 Netzwerke: `web` (frontend ↔ backend) und `data` (backend, worker, db; intern,
 ohne Internetzugang). Die Oberfläche kann die Datenbank also nicht direkt erreichen.
@@ -253,14 +277,17 @@ backend/
   app/validation.py         Pflichtfeld-, IBAN- und Summenprüfung
   app/convert.py            Prüfen + Datei erzeugen (gemeinsam für API und Worker)
   app/db.py                 Archiv (PostgreSQL / SQLite) mit SQLAlchemy
-  app/worker.py             SAP-IDoc-Eingangsordner -> E-Rechnungen
   app/auth.py               Anmeldung, Sitzungen, Rollen, Schutz gegen Passwort-Raten
   app/admin.py              Endpunkte für Anmeldung und Verwaltung (/api/auth, /api/admin)
   app/settings.py           Einstellungen aus der Datenbank (Firmendaten, SAP-Konnektor)
   app/customers.py          Käufer-Adressbuch (merken, ergänzen, suchen)
+  app/ocr.py                Anbindung des OCR-Dienstes (Scans ohne Textebene)
+  app/review.py             Prüfliste „Zu prüfen“
+  app/worker.py             SAP-IDoc- und PDF-Eingang -> E-Rechnungen oder Prüfliste
   app/manage.py             Kommandozeile: Admin anlegen, Passwort zurücksetzen
   app/main.py               FastAPI-Endpunkte (Umwandeln, Archiv)
-frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export, Archiv)
+frontend/                   React + Vite + TypeScript (Start, Zu prüfen, Umwandeln, Archiv, Verwaltung)
+ocr/                        OCR-Dienst (FastAPI + OCRmyPDF/Tesseract, eigener Container)
 compose.yaml                frontend, backend, worker, db, backup
 deploy.sh                   Installation & Update (Docker-Check, .env, Ordner, Start, Prüfung)
 deploy/                     Overlays: compose.https.yaml (Caddy), compose.proxy.yaml (vorhandener Proxy)
@@ -289,9 +316,10 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [ ] Echte **PDF/A-3**-Umwandlung (Ghostscript) + Prüfung mit veraPDF
 - [ ] Versand der E-Rechnungen (E-Mail / PEPPOL) direkt aus dem Worker
 - [ ] Datenbank-Migrationen (Alembic) vor der ersten Schemaänderung
-- [ ] Texterkennung (OCR) für eingescannte PDFs
 - [ ] Rabatte und Zuschläge (Allowances/Charges), Teilzahlungen, Skonto
 - [x] Anmeldung mit Rollen (Admin / Benutzer), Protokoll
 - [x] Stapelverarbeitung, PDF-Vorschau, Käufer-Adressbuch, Archiv-Suche, SAP-Eingang-Status, Backups
+- [x] OCR für Scans, PDF-Eingangsordner, Prüfliste „Zu prüfen“, neue Oberfläche
+- [ ] E-Mail-Eingang (Rechnungen per Mail an ein Postfach)
 - [ ] Firmen-Login (Microsoft Entra ID / SSO), Mandanten
 - [ ] GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)

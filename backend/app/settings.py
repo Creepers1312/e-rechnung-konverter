@@ -3,7 +3,9 @@
 - "company": own master data (seller + payment). Falls back to company.yaml
   (or the example file) until an admin saves it in the UI.
 - "idoc":    SAP ECC IDoc inbox connector (on/off, output format, interval).
-             Falls back to the IDOC_* environment variables.
+             Falls back to the IDOC_* environment variables. The interval is
+             also used for the PDF inbox (one worker loop).
+- "pdf_inbox": PDF inbox folder (on/off, output format, fully automatic export).
 """
 
 from __future__ import annotations
@@ -39,3 +41,15 @@ def idoc_defaults_from_env() -> IdocSettings:
 def get_idoc_settings(session: Session) -> IdocSettings:
     stored = get_setting(session, "idoc")
     return IdocSettings.model_validate(stored) if stored else idoc_defaults_from_env()
+
+
+class PdfInboxSettings(BaseModel):
+    enabled: bool = True
+    profile: Literal["zugferd", "xrechnung"] = "zugferd"
+    # True: invoices without errors are converted right away; False: every PDF goes to "Zu prüfen"
+    auto_export: bool = True
+
+
+def get_pdf_inbox_settings(session: Session) -> PdfInboxSettings:
+    stored = get_setting(session, "pdf_inbox")
+    return PdfInboxSettings.model_validate(stored) if stored else PdfInboxSettings()

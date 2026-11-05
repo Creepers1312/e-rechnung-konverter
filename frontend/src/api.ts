@@ -6,8 +6,12 @@ import type {
   DocumentFilter,
   DocumentPage,
   ExtractionResult,
-  IdocStatus,
+  Dashboard,
   ImportResult,
+  InboxKind,
+  InboxStatus,
+  ReviewDetail,
+  ReviewInfo,
   Invoice,
   Profile,
   Role,
@@ -86,6 +90,7 @@ export async function validateInvoice(
 export interface ExportSource {
   kind: "pdf" | "idoc" | "manual";
   name: string;
+  reviewId?: number;  // marks this review item as done
 }
 
 export interface ExportResult {
@@ -96,6 +101,7 @@ export interface ExportResult {
 export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: File | null, source: ExportSource): Promise<ExportResult> {
   if (profile === "xrechnung") {
     const qs = new URLSearchParams({ source: source.kind, source_name: source.name });
+    if (source.reviewId) qs.set("review_id", String(source.reviewId));
     const res = await check(
       await apiFetch(`/api/export/xrechnung?${qs}`, {
         method: "POST",
@@ -109,6 +115,7 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
   form.append("invoice", JSON.stringify(invoice));
   form.append("source", source.kind);
   form.append("source_name", source.name);
+  if (source.reviewId) form.append("review_id", String(source.reviewId));
   if (pdf) form.append("file", pdf);
   const res = await check(await apiFetch("/api/export/zugferd", { method: "POST", body: form }));
   return { blob: await res.blob(), documentId: Number(res.headers.get("X-Document-Id")) };
@@ -202,10 +209,33 @@ export async function getAudit(action?: string): Promise<AuditEntry[]> {
   return (await check(await apiFetch(`/api/admin/audit${qs}`))).json();
 }
 
-export async function getIdocStatus(): Promise<IdocStatus> {
-  return (await check(await apiFetch("/api/admin/idoc/status"))).json();
+export async function getInboxStatus(): Promise<InboxStatus> {
+  return (await check(await apiFetch("/api/admin/inbox/status"))).json();
 }
 
-export async function retryIdoc(name: string): Promise<void> {
-  await check(await apiFetch("/api/admin/idoc/retry", json("POST", { name })));
+export async function retryInboxFile(kind: InboxKind, name: string): Promise<void> {
+  await check(await apiFetch("/api/admin/inbox/retry", json("POST", { kind, name })));
+}
+
+// --- review queue + dashboard ------------------------------------------------------
+
+export async function getDashboard(): Promise<Dashboard> {
+  return (await check(await apiFetch("/api/dashboard"))).json();
+}
+
+export async function listReview(): Promise<ReviewInfo[]> {
+  return (await check(await apiFetch("/api/review"))).json();
+}
+
+export async function getReview(id: number): Promise<ReviewDetail> {
+  return (await check(await apiFetch(`/api/review/${id}`))).json();
+}
+
+export async function getReviewPdf(id: number, name: string): Promise<File> {
+  const blob = await (await check(await apiFetch(`/api/review/${id}/pdf`))).blob();
+  return new File([blob], name || "rechnung.pdf", { type: "application/pdf" });
+}
+
+export async function discardReview(id: number): Promise<void> {
+  await check(await apiFetch(`/api/review/${id}/discard`, { method: "POST" }));
 }

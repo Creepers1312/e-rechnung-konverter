@@ -2,9 +2,10 @@
 #
 #   frontend  nginx: web UI + reverse proxy for /api   (only published port)
 #   backend   FastAPI                                   (internal only)
-#   worker    SAP ECC IDoc inbox -> e-invoices          (no internet access)
+#   worker    SAP-IDoc + PDF inbox -> e-invoices        (no internet access)
 #   db        PostgreSQL archive of all e-invoices      (internal only)
 #   backup    daily pg_dump of the database             (no internet access)
+#   ocr       OCRmyPDF/Tesseract for scanned PDFs       (no internet access)
 #
 # Network "web" connects frontend and backend; network "data" (internal, no
 # internet) connects backend, worker and db. The frontend cannot reach the db.
@@ -22,6 +23,7 @@ name: erechnung
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-erechnung}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-erechnung}
+  OCR_URL: http://ocr:8000
 
 services:
   db:
@@ -53,9 +55,11 @@ services:
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-60}
       SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-12}
       IDOC_DIR: /data/idoc
+      PDF_DIR: /data/pdf
     volumes:
       - ./backend/config:/app/config:ro  # company.yaml (own master data)
-      - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # admin status page + "retry failed IDoc"
+      - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # admin status page + "retry failed file"
+      - ${PDF_HOST_DIR:-./data/pdf}:/data/pdf
     depends_on:
       db:
         condition: service_healthy
@@ -68,11 +72,13 @@ services:
     environment:
       <<: *backend-env
       IDOC_DIR: /data/idoc
+      PDF_DIR: /data/pdf
       IDOC_PROFILE: ${IDOC_PROFILE:-zugferd}
       IDOC_INTERVAL: ${IDOC_INTERVAL:-10}
     volumes:
       - ./backend/config:/app/config:ro
       - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # SAP writes into <dir>/inbox
+      - ${PDF_HOST_DIR:-./data/pdf}:/data/pdf  # scanner / file share writes PDFs into <dir>/inbox
     healthcheck:  # healthy = a polling round finished within the last 60 s
       test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-heartbeat') > 60)"]
       interval: 15s
@@ -107,6 +113,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks: [data]
+
+  ocr:
+    build: ./ocr
+    image: ${COMPOSE_PROJECT_NAME:-erechnung}-ocr:latest
+    restart: unless-stopped
+    environment:
+      OCR_LANG: ${OCR_LANG:-deu+eng}
+      OCR_PARALLEL: ${OCR_PARALLEL:-2}
     networks: [data]
 
   frontend:

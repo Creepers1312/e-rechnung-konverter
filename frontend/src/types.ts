@@ -30,6 +30,7 @@ export interface Party {
 export interface LineItem {
   id: string;
   name: string;
+  seller_item_id: string;
   quantity: string;
   unit_code: string;
   unit_price: string;
@@ -75,6 +76,7 @@ export interface ExtractionResult {
   warnings: string[];
   notes: string[];
   raw_text: string;
+  ocr: boolean;
 }
 
 export interface Issue {
@@ -142,9 +144,16 @@ export interface IdocSettings {
   interval_seconds: number;
 }
 
+export interface PdfInboxSettings {
+  enabled: boolean;
+  profile: Profile;
+  auto_export: boolean;
+}
+
 export interface AdminSettings {
   company: Company;
   idoc: IdocSettings;
+  pdf_inbox: PdfInboxSettings;
 }
 
 export interface AuditEntry {
@@ -183,26 +192,68 @@ export interface CustomerInfo {
   updated_at: string;
 }
 
-export interface IdocErrorFile {
+export interface ErrorFile {
   name: string;
   size: number;
   modified_at: string;
   reason: string;
 }
 
-export interface IdocStatus {
+export type InboxKind = "idoc" | "pdf";
+
+export interface InboxInfo {
+  kind: InboxKind;
+  label: string;
   folder_available: boolean;
-  worker_alive: boolean;
-  worker: {
-    last_round_at?: string;
-    enabled?: boolean;
-    profile?: Profile;
-    interval_seconds?: number;
-    converted_total?: number;
-    failed_total?: number;
-    last_converted_at?: string | null;
-    last_failed_at?: string | null;
-  };
   counts: Record<"inbox" | "outbox" | "processed" | "error", number>;
-  errors: IdocErrorFile[];
+  errors: ErrorFile[];
+}
+
+export interface WorkerReport {
+  last_round_at?: string;
+  enabled?: boolean;
+  pdf_enabled?: boolean;
+  profile?: Profile;
+  interval_seconds?: number;
+  converted_total?: number;
+  failed_total?: number;
+  review_total?: number;
+  last_converted_at?: string | null;
+  last_failed_at?: string | null;
+}
+
+export interface InboxStatus {
+  worker_alive: boolean;
+  worker: WorkerReport;
+  inboxes: InboxInfo[];
+}
+
+export interface ReviewInfo {
+  id: number;
+  created_at: string;
+  status: "offen" | "erledigt" | "verworfen";
+  source: "pdf" | "idoc";
+  source_name: string;
+  profile: Profile;
+  invoice_number: string;
+  buyer_name: string;
+  issues: Issue[];
+  resolved_by: string;
+  document_id: number | null;
+}
+
+export interface ReviewDetail extends ReviewInfo {
+  invoice: Invoice;
+  stated_totals: StatedTotals | null;
+  warnings: string[];
+  notes: string[];
+  template_name: string;
+  has_pdf: boolean;
+}
+
+export interface Dashboard {
+  review_open: number;
+  documents_today: number;
+  documents_total: number;
+  worker: WorkerReport;
 }

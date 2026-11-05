@@ -11,6 +11,8 @@ export interface Loaded {
   warnings: string[];
   notes: string[];
   templateName: string;
+  reviewId?: number; // opened from "Zu prüfen": exporting marks it done
+  reviewProfile?: Profile;
 }
 
 export type BatchStatus = "wartet" | "läuft" | "fertig" | "prüfen" | "fehler";

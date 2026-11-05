@@ -228,12 +228,13 @@ else
 
   # Ordner für SAP-IDocs und Backups; die Container laufen als UID 10001 bzw. root
   idoc=$(env_get IDOC_HOST_DIR); idoc=${idoc:-./data/idoc}
+  pdfdir=$(env_get PDF_HOST_DIR); pdfdir=${pdfdir:-./data/pdf}
   backups=$(env_get BACKUP_HOST_DIR); backups=${backups:-./backups}
-  mkdir -p "$idoc"/{inbox,outbox,processed,error} "$backups"
-  $SUDO chown -R 10001 "$idoc"
+  mkdir -p "$idoc"/{inbox,outbox,processed,error} "$pdfdir"/{inbox,outbox,processed,error} "$backups"
+  $SUDO chown -R 10001 "$idoc" "$pdfdir"
   chmod 700 "$backups"
   ok ".env angelegt (Passwörter zufällig erzeugt, Datei nur für den Besitzer lesbar)"
-  ok "Ordner: IDocs in $idoc, Sicherungen in $backups"
+  ok "Ordner: IDocs in $idoc, PDFs in $pdfdir, Sicherungen in $backups"
   trap - EXIT  # .env is complete from here on
 fi
 
@@ -245,6 +246,14 @@ ADMIN_PW=$(env_get ADMIN_PASSWORD)
 while IFS='=' read -r key _; do
   [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] && unset "$key"
 done < .env
+
+# Folders added in later versions (e.g. the PDF inbox) also exist after an update.
+pdfdir=$(env_get PDF_HOST_DIR)
+if [ -z "$pdfdir" ]; then env_set PDF_HOST_DIR ./data/pdf; pdfdir=./data/pdf; fi
+if [ ! -d "$pdfdir/inbox" ]; then
+  mkdir -p "$pdfdir"/{inbox,outbox,processed,error} && $SUDO chown -R 10001 "$pdfdir"
+  ok "PDF-Eingang angelegt: $pdfdir/inbox"
+fi
 
 MODE_NOW=$(env_get COMPOSE_FILE)
 case "$MODE_NOW" in *https*) MODE=https ;; *proxy*) MODE=proxy ;; *) MODE=port ;; esac
@@ -322,6 +331,7 @@ case "$MODE" in
 esac
 echo
 echo "  SAP-IDocs:    $(env_get IDOC_HOST_DIR)/inbox"
+echo "  PDF-Eingang:  $(env_get PDF_HOST_DIR)/inbox   (Scanner/Netzlaufwerk hier ablegen lassen)"
 echo "  Sicherungen:  $(env_get BACKUP_HOST_DIR) (täglich $(env_get BACKUP_TIME) UTC, $(env_get BACKUP_KEEP_DAYS) Tage)"
 echo "  Update:       ./deploy.sh"
 echo "  Status/Logs:  docker compose ps   ·   docker compose logs -f backend worker"

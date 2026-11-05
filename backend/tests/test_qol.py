@@ -160,27 +160,33 @@ def test_idoc_status_and_retry(admin_client: TestClient, client: TestClient, tmp
         ok, failed = process_once(folders, "zugferd", s, now=1e12)
         report_status(s, True, "zugferd", 10, ok, failed)
 
-    st = admin_client.get("/api/admin/idoc/status").json()
-    assert st["folder_available"] is True and st["worker_alive"] is True
-    assert st["counts"] == {"inbox": 0, "outbox": 1, "processed": 1, "error": 1}
+    st = admin_client.get("/api/admin/inbox/status").json()
+    idoc = next(i for i in st["inboxes"] if i["kind"] == "idoc")
+    assert idoc["folder_available"] is True and st["worker_alive"] is True
+    assert idoc["counts"] == {"inbox": 0, "outbox": 1, "processed": 1, "error": 1}
     assert st["worker"]["converted_total"] >= 1 and st["worker"]["failed_total"] >= 1
-    [err] = st["errors"]
+    [err] = idoc["errors"]
     assert err["name"] == "kaputt.xml" and "E1EDK01" in err["reason"]
 
-    assert client.get("/api/admin/idoc/status").status_code == 403  # users may not
-    assert admin_client.post("/api/admin/idoc/retry", json={"name": "../../etc/passwd"}).status_code == 400
-    assert admin_client.post("/api/admin/idoc/retry", json={"name": "fehlt.xml"}).status_code == 404
+    assert client.get("/api/admin/inbox/status").status_code == 403  # users may not
+    assert (
+        admin_client.post("/api/admin/inbox/retry", json={"kind": "idoc", "name": "../../etc/passwd"}).status_code
+        == 400
+    )
+    assert admin_client.post("/api/admin/inbox/retry", json={"kind": "idoc", "name": "fehlt.xml"}).status_code == 404
 
-    assert admin_client.post("/api/admin/idoc/retry", json={"name": "kaputt.xml"}).status_code == 204
+    assert admin_client.post("/api/admin/inbox/retry", json={"kind": "idoc", "name": "kaputt.xml"}).status_code == 204
     assert (folders.inbox / "kaputt.xml").exists()
     assert not (folders.error / "kaputt.xml.error.txt").exists()
-    assert admin_client.get("/api/admin/idoc/status").json()["counts"]["inbox"] == 1
+    after = admin_client.get("/api/admin/inbox/status").json()
+    assert next(i for i in after["inboxes"] if i["kind"] == "idoc")["counts"]["inbox"] == 1
 
 
 def test_idoc_status_without_folder(admin_client: TestClient, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("IDOC_DIR", str(tmp_path / "nicht-eingebunden"))
-    st = admin_client.get("/api/admin/idoc/status").json()
-    assert st["folder_available"] is False and st["errors"] == []
+    st = admin_client.get("/api/admin/inbox/status").json()
+    idoc = next(i for i in st["inboxes"] if i["kind"] == "idoc")
+    assert idoc["folder_available"] is False and idoc["errors"] == []
 
 
 def test_address_book_search_and_name_match_ignore_case_for_erp_keyed_customers() -> None:

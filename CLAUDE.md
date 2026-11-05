@@ -32,9 +32,10 @@ comments and identifiers are English.
    both the API and the IDoc worker.
 7. **Deployment is Docker Compose** (`compose.yaml`): frontend (nginx, only
    published port), backend, worker (same image, `python -m app.worker`), db
-   (PostgreSQL), backup (`backup/backup.sh`, pg_dump). Network `data` is
-   internal: worker, db and backup have no internet. The IDoc folder is mounted
-   into worker (processing) and backend (admin status/retry).
+   (PostgreSQL), backup (`backup/backup.sh`, pg_dump), ocr (`ocr/`, OCRmyPDF).
+   Network `data` is internal: worker, db, backup and ocr have no internet. The
+   IDoc and PDF inbox folders are mounted into worker (processing) and backend
+   (admin status/retry).
    `deploy.sh` installs/updates; overlays in `deploy/` (Caddy HTTPS, existing
    Docker proxy) are selected via `COMPOSE_FILE` in `.env`. Everything is
    namespaced by `COMPOSE_PROJECT_NAME` – never hard-code container, network,
@@ -53,14 +54,25 @@ comments and identifiers are English.
     `customers.fill` only fills *empty* fields. Text search must lower-case both
     sides – PostgreSQL's LIKE is case-sensitive, SQLite's (used in tests) is not.
 
+11. **Automation first, review second** (`app/worker.py`, `app/review.py`):
+    inbox files that pass validation are converted without user action; files
+    with validation errors become review items ("Zu prüfen"), never silent
+    failures. Only unreadable files go to `error/`. Scans go through
+    `ocr.text_of_pdf` (OCR service) before recognition.
+12. **Recognition rules must not cross lines**: use `{SEP}` between a label and
+    its value in templates. Placeholders (`{AMOUNT}`, `{DATE}`, `{NUMBER}`,
+    `{SEP}`) are wrapped in groups by the engine. Multi-line items use
+    `lines.block_pattern`.
+
 ## Commands
 
 ```bash
 cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/pytest   # must stay green (CI)
 cd frontend && pnpm typecheck && pnpm build
+cd ocr && pytest        # needs tesseract (+ deu) and ocrmypdf
 ```
 
 ## Not yet (see README roadmap)
 
 KoSIT Schematron validation, strict PDF/A-3 conversion, sending (e-mail/PEPPOL),
-Alembic migrations, OCR, allowances/charges, SSO (Entra ID), multi-tenancy.
+Alembic migrations, e-mail inbox, allowances/charges, SSO (Entra ID), multi-tenancy.

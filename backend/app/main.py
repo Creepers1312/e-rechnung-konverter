@@ -10,29 +10,31 @@ import io
 import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import customers
+from . import customers, review
 from .admin import router as admin_router
 from .auth import bootstrap_admin, current_user
 from .company import Company
 from .convert import EInvoice, NotExportable, convert
-from .db import Document, User, archive, audit, get_engine, get_session, search_documents
+from .db import Document, ReviewItem, User, archive, audit, get_engine, get_session, get_setting, search_documents
 from .erp.sap_ecc_idoc import parse_invoic02
 from .export.cii import Profile, build_cii
 from .export.zugferd import check_xsd
-from .extraction.pdf_text import PdfText
 from .extraction.rules import ExtractionResult, extract
 from .model import Invoice, Party, Totals, compute_totals
+from .ocr import text_of_pdf
 from .settings import get_company
 from .validation import Issue, StatedTotals, validate
+from .worker import STATUS_KEY
 
 MAX_UPLOAD = 20 * 1024 * 1024
 
@@ -90,6 +92,38 @@ class ImportResult(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ReviewInfo(BaseModel):
+    id: int
+    created_at: datetime
+    status: str
+    source: str
+    source_name: str
+    profile: str
+    invoice_number: str
+    buyer_name: str
+    issues: list[dict]
+    resolved_by: str
+    document_id: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewDetail(ReviewInfo):
+    invoice: Invoice
+    stated_totals: StatedTotals | None
+    warnings: list[str]
+    notes: list[str]
+    template_name: str
+    has_pdf: bool
+
+
+class Dashboard(BaseModel):
+    review_open: int
+    documents_today: int
+    documents_total: int
+    worker: dict  # last report of the inbox worker (see worker.report_status)
+
+
 class CustomerInfo(BaseModel):
     id: int
     name: str
@@ -119,7 +153,9 @@ def _convert_and_archive(
     source_pdf: bytes | None,
     source: str,
     source_name: str,
+    review_id: int | None = None,
 ) -> Response:
+    item = _open_review_item(session, review_id) if review_id is not None else None
     try:
         result: EInvoice = convert(invoice, profile, source_pdf)
     except NotExportable as exc:
@@ -128,6 +164,9 @@ def _convert_and_archive(
         ) from exc
     audit(session, user.username, "export", invoice_number=invoice.number, profile=profile)
     customers.remember(session, invoice, user.username)  # committed together with the archive entry
+    if item is not None and source_pdf is None and item.pdf and profile == "zugferd":
+        source_pdf = item.pdf  # embed into the original scan, as for a direct upload
+        result = convert(invoice, profile, source_pdf)
     doc = archive(
         session,
         invoice,
@@ -139,6 +178,9 @@ def _convert_and_archive(
         content=result.content,
         created_by=user.username,
     )
+    if item is not None:
+        review.resolve(session, item, status="erledigt", username=user.username, document_id=doc.id)
+        session.commit()
     return Response(
         result.content,
         media_type=result.media_type,
@@ -166,7 +208,10 @@ async def extract_pdf(
     data = await _read(file)
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "Keine PDF-Datei.")
-    result = extract(PdfText.from_bytes(data), get_company(session))
+    pdf, ocr_problem = text_of_pdf(data, file.filename or "scan.pdf")
+    result = extract(pdf, get_company(session))
+    if ocr_problem:
+        result.warnings.insert(0, ocr_problem)
     result.notes += _filled_note(customers.fill(session, result.invoice))
     return result
 
@@ -209,10 +254,11 @@ def export_xrechnung(
     invoice: Invoice,
     source: str = Query("manual", max_length=20),
     source_name: str = Query("", max_length=255),
+    review_id: int | None = Query(None, description="Prüfeintrag, der damit erledigt ist"),
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> Response:
-    return _convert_and_archive(session, user, invoice, "xrechnung", None, source, source_name)
+    return _convert_and_archive(session, user, invoice, "xrechnung", None, source, source_name, review_id)
 
 
 @app.post("/api/export/zugferd")
@@ -221,16 +267,17 @@ async def export_zugferd(
     file: UploadFile | None = File(None),
     source: str = Form("manual", max_length=20),
     source_name: str = Form("", max_length=255),
+    review_id: int | None = Form(None),
     user: User = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> Response:
-    """Embed the XML into the uploaded PDF, or into a generated one if none is sent."""
+    """Embed the XML into the uploaded PDF (or the review item's original, or a generated one)."""
     try:
         inv = Invoice.model_validate_json(invoice)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False)) from exc
     pdf = await _read(file) if file is not None else None
-    return _convert_and_archive(session, user, inv, "zugferd", pdf, source, source_name)
+    return _convert_and_archive(session, user, inv, "zugferd", pdf, source, source_name, review_id)
 
 
 @app.get("/api/documents", response_model=DocumentPage)
@@ -298,4 +345,78 @@ def download_document(
         doc.content,
         media_type=doc.media_type,
         headers={"Content-Disposition": f'attachment; filename="{doc.filename}"'},
+    )
+
+
+# --- review queue ("Zu prüfen") ------------------------------------------------
+
+
+def _open_review_item(session: Session, review_id: int) -> ReviewItem:
+    item = session.get(ReviewItem, review_id)
+    if item is None:
+        raise HTTPException(404, "Prüfeintrag nicht gefunden.")
+    if item.status != "offen":
+        raise HTTPException(409, f"Dieser Prüfeintrag ist bereits {item.status}.")
+    return item
+
+
+@app.get("/api/review", response_model=list[ReviewInfo])
+def review_list(
+    status: Literal["offen", "erledigt", "verworfen", "alle"] = "offen",
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
+) -> list[ReviewItem]:
+    return review.list_items(session, status)
+
+
+@app.get("/api/review/{review_id}", response_model=ReviewDetail)
+def review_detail(review_id: int, _: User = Depends(current_user), session: Session = Depends(get_session)) -> dict:
+    item = session.get(ReviewItem, review_id)
+    if item is None:
+        raise HTTPException(404, "Prüfeintrag nicht gefunden.")
+    data = ReviewInfo.model_validate(item).model_dump()
+    return {
+        **data,
+        "invoice": item.invoice,
+        "stated_totals": item.stated_totals,
+        "warnings": item.warnings,
+        "notes": item.notes,
+        "template_name": item.template_name,
+        "has_pdf": item.pdf is not None,
+    }
+
+
+@app.get("/api/review/{review_id}/pdf")
+def review_pdf(review_id: int, _: User = Depends(current_user), session: Session = Depends(get_session)) -> Response:
+    item = session.get(ReviewItem, review_id)
+    if item is None or item.pdf is None:
+        raise HTTPException(404, "Kein PDF vorhanden.")
+    return Response(
+        item.pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{item.source_name or "rechnung.pdf"}"'},
+    )
+
+
+@app.post("/api/review/{review_id}/discard", status_code=204)
+def review_discard(
+    review_id: int, user: User = Depends(current_user), session: Session = Depends(get_session)
+) -> Response:
+    item = _open_review_item(session, review_id)
+    review.resolve(session, item, status="verworfen", username=user.username)
+    audit(session, user.username, "review_discarded", review_id=review_id, source_name=item.source_name)
+    session.commit()
+    return Response(status_code=204)
+
+
+@app.get("/api/dashboard", response_model=Dashboard)
+def dashboard(_: User = Depends(current_user), session: Session = Depends(get_session)) -> Dashboard:
+    today = datetime.now(UTC).date()
+    _, today_count = search_documents(session, date_from=today, limit=1)
+    total = session.scalar(select(func.count()).select_from(Document)) or 0
+    return Dashboard(
+        review_open=review.open_count(session),
+        documents_today=today_count,
+        documents_total=total,
+        worker=get_setting(session, STATUS_KEY) or {},
     )

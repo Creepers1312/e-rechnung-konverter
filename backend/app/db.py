@@ -124,6 +124,31 @@ class Customer(Base):
     updated_by: Mapped[str] = mapped_column(String(100), default="")
 
 
+class ReviewItem(Base):
+    """An invoice the automation could not finish on its own ("Zu prüfen")."""
+
+    __tablename__ = "review_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+    status: Mapped[str] = mapped_column(String(20), default="offen", index=True)  # offen | erledigt | verworfen
+    source: Mapped[str] = mapped_column(String(20))  # pdf | idoc
+    source_name: Mapped[str] = mapped_column(String(255), default="")
+    profile: Mapped[str] = mapped_column(String(20))
+    invoice_number: Mapped[str] = mapped_column(String(100), default="")
+    buyer_name: Mapped[str] = mapped_column(String(255), default="")
+    invoice: Mapped[dict] = mapped_column(JSON)  # extracted Invoice as JSON
+    stated_totals: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    warnings: Mapped[list] = mapped_column(JSON, default=list)
+    notes: Mapped[list] = mapped_column(JSON, default=list)
+    issues: Mapped[list] = mapped_column(JSON, default=list)  # validation errors that stopped the automation
+    template_name: Mapped[str] = mapped_column(String(255), default="")
+    pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)  # original file (PDF sources)
+    document_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # archive entry once done
+    resolved_by: Mapped[str] = mapped_column(String(100), default="")
+
+
 def database_url() -> str:
     return os.environ.get("DATABASE_URL", DEFAULT_URL)
 
