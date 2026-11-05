@@ -22,8 +22,10 @@ comments and identifiers are English.
 4. **ERP access goes through adapters** implementing `ErpAdapter`
    (`app/erp/base.py`). SAP ECC is read via INVOIC02 IDoc XML files — no RFC/SDK.
    SAP field mapping lives in one `MAPPING` dict.
-5. **Own company = seller**, from `backend/config/company.yaml` (git-ignored;
-   `company.example.yaml` is the template). Master data wins over document data.
+5. **Own company = seller**, edited by admins in the UI (`settings` table, read
+   via `settings.get_company`); `backend/config/company.yaml` (git-ignored,
+   template `company.example.yaml`) is only the fallback until then.
+   Master data wins over document data.
 6. **The API is stateless while editing.** The client holds invoice + source PDF
    between calls; only finished exports are persisted (`app/db.py`, table
    `documents`). `app/convert.py` is the single validate-then-build path used by
