@@ -159,3 +159,41 @@ def test_extract_endpoint_reports_unreachable_ocr(client, monkeypatch) -> None: 
     r = client.post("/api/extract", files={"file": ("scan.pdf", _pdf([]), "application/pdf")})
     assert r.status_code == 200
     assert "OCR-Dienst nicht erreichbar" in r.json()["warnings"][0]
+
+
+def _letter(address: list[str], x: float, rows: list[str] | None = None) -> bytes:
+    """Address block at `x` points from the left edge, like a real letterhead."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    _, height = A4
+    c.setFont("Helvetica", 7)
+    c.drawString(x, height - 150, "Rheinfelden Carbon Products GmbH, Musterweg 2, D-79618 Rheinfelden")
+    c.setFont("Helvetica", 10)
+    for i, row in enumerate(address):
+        c.drawString(x, height - 172 - i * 12, row)
+    for i, row in enumerate(rows or []):
+        c.drawString(330, height - 160 - i * 14, row)
+    c.save()
+    return buf.getvalue()
+
+
+def test_buyer_found_in_narrow_left_margin() -> None:
+    """Regression: the address window of the SAP letterhead starts at ~44 pt (15.5 mm). The old box began at
+    50 pt and cut the first word of every line – including the postcode, so no buyer was found at all."""
+    pdf = _letter(
+        ["Beispiel Chemie AG", "Werk Süd", "Werkstraße 7", "84508 Burgkirchen"],
+        x=44,
+        rows=["Rechnungs-Nr. / Datum: 6000001234 / 03.11.2026"],
+    )
+    buyer = extract(PdfText.from_bytes(pdf), _company("Musterfirma GmbH")).invoice.buyer
+    assert buyer.name == "Beispiel Chemie AG"  # not "Chemie AG", and not the return line
+    assert buyer.address.line1 == "Werkstraße 7" and buyer.address.line2 == "Werk Süd"
+    assert (buyer.address.postcode, buyer.address.city, buyer.address.country_code) == ("84508", "Burgkirchen", "DE")
+
+
+def test_buyer_country_from_prefix_or_country_line() -> None:
+    at = _letter(["Muster Metall GmbH", "Industriestraße 1", "A-4020 Linz"], x=57)
+    assert extract(PdfText.from_bytes(at), _company()).invoice.buyer.address.country_code == "AT"
+    ch = _letter(["Muster AG", "Hauptstrasse 9", "4310 Rheinfelden", "Schweiz"], x=57)
+    buyer = extract(PdfText.from_bytes(ch), _company()).invoice.buyer
+    assert (buyer.name, buyer.address.city, buyer.address.country_code) == ("Muster AG", "Rheinfelden", "CH")

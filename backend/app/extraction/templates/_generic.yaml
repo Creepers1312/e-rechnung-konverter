@@ -62,10 +62,12 @@ units:
   tonne: TNE
   tonnen: TNE
 
-# Buyer address: DIN 5008 address window, in PDF points from the top-left
-# of page 1 (x0, top, x1, bottom). Lines containing the seller's name
-# (the small return-address line) are skipped.
-buyer_region: [50, 120, 300, 260]
+# Buyer address: the address window, in PDF points from the top-left of page 1
+# (x0, top, x1, bottom). Generous on purpose: DIN 5008 puts it at 20 mm from the
+# left, but many letterheads (e.g. SAP forms) start at ~15 mm – a too narrow box
+# cuts off the first word of every line, including the postcode.
+# The small return-address line ("Firma, Straße, PLZ Ort") is skipped.
+buyer_region: [20, 110, 310, 270]
 
 defaults:
   vat_rate: 19
