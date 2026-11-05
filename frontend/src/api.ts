@@ -1,4 +1,15 @@
-import type { ArchivedDocument, ExtractionResult, Invoice, Profile, StatedTotals, ValidateResponse } from "./types";
+import type {
+  AdminSettings,
+  ArchivedDocument,
+  AuditEntry,
+  CurrentUser,
+  ExtractionResult,
+  Invoice,
+  Profile,
+  Role,
+  StatedTotals,
+  ValidateResponse,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(message: string, public details: string[] = []) {
@@ -6,8 +17,19 @@ export class ApiError extends Error {
   }
 }
 
-async function check(res: Response): Promise<Response> {
+/** Fired when the server says the session is gone; App.tsx shows the login again. */
+export const UNAUTHORIZED_EVENT = "erechnung:unauthorized";
+
+/** fetch() with the CSRF header the backend requires on every write. */
+function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("X-Requested-With", "erechnung");
+  return fetch(input, { ...init, headers, credentials: "same-origin" });
+}
+
+async function check(res: Response, { notifyUnauthorized = true } = {}): Promise<Response> {
   if (res.ok) return res;
+  if (res.status === 401 && notifyUnauthorized) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   let message = `Fehler ${res.status}`;
   let details: string[] = [];
   try {
@@ -31,12 +53,12 @@ function upload(file: File): FormData {
 }
 
 export async function extractPdf(file: File): Promise<ExtractionResult> {
-  const res = await check(await fetch("/api/extract", { method: "POST", body: upload(file) }));
+  const res = await check(await apiFetch("/api/extract", { method: "POST", body: upload(file) }));
   return res.json();
 }
 
 export async function importIdoc(file: File): Promise<Invoice> {
-  const res = await check(await fetch("/api/erp/sap-ecc/idoc", { method: "POST", body: upload(file) }));
+  const res = await check(await apiFetch("/api/erp/sap-ecc/idoc", { method: "POST", body: upload(file) }));
   return res.json();
 }
 
@@ -47,7 +69,7 @@ export async function validateInvoice(
   signal?: AbortSignal,
 ): Promise<ValidateResponse> {
   const res = await check(
-    await fetch("/api/validate", {
+    await apiFetch("/api/validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ invoice, profile, stated_totals: stated }),
@@ -66,7 +88,7 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
   if (profile === "xrechnung") {
     const qs = new URLSearchParams({ source: source.kind, source_name: source.name });
     const res = await check(
-      await fetch(`/api/export/xrechnung?${qs}`, {
+      await apiFetch(`/api/export/xrechnung?${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(invoice),
@@ -79,15 +101,75 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
   form.append("source", source.kind);
   form.append("source_name", source.name);
   if (pdf) form.append("file", pdf);
-  const res = await check(await fetch("/api/export/zugferd", { method: "POST", body: form }));
+  const res = await check(await apiFetch("/api/export/zugferd", { method: "POST", body: form }));
   return res.blob();
 }
 
 export async function listDocuments(): Promise<ArchivedDocument[]> {
-  const res = await check(await fetch("/api/documents"));
+  const res = await check(await apiFetch("/api/documents"));
   return res.json();
 }
 
 export function documentUrl(id: number): string {
   return `/api/documents/${id}/download`;
+}
+
+// --- auth ---------------------------------------------------------------------
+
+function json(method: string, body: unknown): RequestInit {
+  return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+}
+
+/** null when not logged in. */
+export async function getMe(): Promise<CurrentUser | null> {
+  const res = await apiFetch("/api/auth/me");
+  if (res.status === 401) return null;
+  return (await check(res)).json();
+}
+
+export async function login(username: string, password: string): Promise<CurrentUser> {
+  const res = await check(await apiFetch("/api/auth/login", json("POST", { username, password })), {
+    notifyUnauthorized: false,
+  });
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch("/api/auth/logout", { method: "POST" });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await check(
+    await apiFetch("/api/auth/password", json("POST", { current_password: currentPassword, new_password: newPassword })),
+  );
+}
+
+// --- admin --------------------------------------------------------------------
+
+export async function listUsers(): Promise<CurrentUser[]> {
+  return (await check(await apiFetch("/api/admin/users"))).json();
+}
+
+export async function createUser(username: string, role: Role, password: string): Promise<CurrentUser> {
+  return (await check(await apiFetch("/api/admin/users", json("POST", { username, role, password })))).json();
+}
+
+export async function updateUser(
+  id: number,
+  change: { role?: Role; active?: boolean; password?: string },
+): Promise<CurrentUser> {
+  return (await check(await apiFetch(`/api/admin/users/${id}`, json("PATCH", change)))).json();
+}
+
+export async function getSettings(): Promise<AdminSettings> {
+  return (await check(await apiFetch("/api/admin/settings"))).json();
+}
+
+export async function saveSettings(settings: AdminSettings): Promise<AdminSettings> {
+  return (await check(await apiFetch("/api/admin/settings", json("PUT", settings)))).json();
+}
+
+export async function getAudit(action?: string): Promise<AuditEntry[]> {
+  const qs = action ? `?${new URLSearchParams({ action })}` : "";
+  return (await check(await apiFetch(`/api/admin/audit${qs}`))).json();
 }

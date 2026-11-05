@@ -8,10 +8,14 @@
 Every converted invoice is also archived in the database. Run with
 `python -m app.worker` (Docker service `worker`).
 
+On/off, output format and interval are set by an admin in the web UI
+(Verwaltung -> Einstellungen) and re-read every round; until then the
+environment provides the defaults.
+
 Settings (environment):
     IDOC_DIR        base folder (default ./data/idoc)
-    IDOC_PROFILE    zugferd | xrechnung (default zugferd)
-    IDOC_INTERVAL   poll interval in seconds (default 10)
+    IDOC_PROFILE    default format: zugferd | xrechnung (default zugferd)
+    IDOC_INTERVAL   default poll interval in seconds (default 10)
     WORKER_HEARTBEAT  file touched after every round (default /tmp/worker-heartbeat),
                       used by the Docker health check
 """
@@ -27,11 +31,11 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from .company import load_company
 from .convert import convert
 from .db import archive, get_engine
 from .erp.sap_ecc_idoc import SapEccIdocFolderAdapter
 from .export.cii import Profile
+from .settings import get_company, get_idoc_settings
 
 log = logging.getLogger("erechnung.worker")
 
@@ -67,7 +71,7 @@ def _move(src: Path, dest_dir: Path) -> Path:
 
 def process_once(folders: Folders, profile: Profile, session: Session, now: float | None = None) -> tuple[int, int]:
     """Convert every ready file in the inbox. Returns (converted, failed)."""
-    adapter = SapEccIdocFolderAdapter(folders.inbox, load_company())
+    adapter = SapEccIdocFolderAdapter(folders.inbox, get_company(session))
     now = time.time() if now is None else now
     ok = failed = 0
     for name in adapter.list_new_invoices():
@@ -80,6 +84,7 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
             archive(
                 session, invoice, profile=profile, source="idoc", source_name=name,
                 filename=result.filename, media_type=result.media_type, content=result.content,
+                created_by="worker",
             )
             (folders.outbox / result.filename).write_bytes(result.content)
             _move(path, folders.processed)
@@ -97,16 +102,23 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     folders = Folders.under(Path(os.environ.get("IDOC_DIR", "./data/idoc")))
-    profile: Profile = "xrechnung" if os.environ.get("IDOC_PROFILE") == "xrechnung" else "zugferd"
-    interval = float(os.environ.get("IDOC_INTERVAL", "10"))
     make_session = sessionmaker(get_engine(), expire_on_commit=False)
-    log.info("watching %s (profile=%s, every %ss)", folders.inbox, profile, interval)
     heartbeat = Path(os.environ.get("WORKER_HEARTBEAT", "/tmp/worker-heartbeat"))
+    log.info("watching %s", folders.inbox)
+    interval = 10
+    last: tuple[bool, str] | None = None
     while True:
         try:
             with make_session() as session:
-                process_once(folders, profile, session)
-            heartbeat.touch()
+                cfg = get_idoc_settings(session)
+                interval = cfg.interval_seconds
+                if last != (cfg.enabled, cfg.profile):
+                    log.info("connector %s, format=%s, every %ss",
+                             "enabled" if cfg.enabled else "DISABLED", cfg.profile, interval)
+                    last = (cfg.enabled, cfg.profile)
+                if cfg.enabled:
+                    process_once(folders, cfg.profile, session)
+            heartbeat.touch()  # also while disabled: the worker itself is healthy
         except Exception:  # e.g. database briefly unreachable: retry next round
             log.exception("round failed")
         time.sleep(interval)

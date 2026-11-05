@@ -107,6 +107,7 @@ export interface ValidateResponse {
 export interface ArchivedDocument {
   id: number;
   created_at: string;
+  created_by: string;
   source: string;
   source_name: string;
   profile: Profile;
@@ -115,4 +116,40 @@ export interface ArchivedDocument {
   grand_total: string;
   currency: string;
   filename: string;
+}
+
+export type Role = "admin" | "user";
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  role: Role;
+  active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface Company {
+  seller: Party;
+  payment: PaymentInfo;
+}
+
+export interface IdocSettings {
+  enabled: boolean;
+  profile: Profile;
+  interval_seconds: number;
+}
+
+export interface AdminSettings {
+  company: Company;
+  idoc: IdocSettings;
+}
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  username: string;
+  action: string;
+  detail: Record<string, unknown>;
 }

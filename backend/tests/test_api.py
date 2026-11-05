@@ -6,14 +6,11 @@ import facturx
 from fastapi.testclient import TestClient
 
 from app.export.pdf_render import render_invoice_pdf
-from app.main import app
 from app.model import Invoice
-
-client = TestClient(app)
 SAMPLE_IDOC = Path(__file__).parent / "fixtures" / "invoic02_sample.xml"
 
 
-def test_extract_then_validate_then_export(invoice: Invoice) -> None:
+def test_extract_then_validate_then_export(client: TestClient, invoice: Invoice) -> None:
     pdf = render_invoice_pdf(invoice)
     r = client.post("/api/extract", files={"file": ("r.pdf", pdf, "application/pdf")})
     assert r.status_code == 200, r.text
@@ -42,19 +39,19 @@ def test_extract_then_validate_then_export(invoice: Invoice) -> None:
     assert b"xrechnung_3.0" in r.content
 
 
-def test_export_refuses_incomplete_invoice(invoice: Invoice) -> None:
+def test_export_refuses_incomplete_invoice(client: TestClient, invoice: Invoice) -> None:
     invoice.number = ""
     r = client.post("/api/export/xrechnung", json=invoice.model_dump(mode="json"))
     assert r.status_code == 422
     assert any(i["code"] == "BR-02" for i in r.json()["detail"]["issues"])
 
 
-def test_extract_rejects_non_pdf() -> None:
+def test_extract_rejects_non_pdf(client: TestClient) -> None:
     r = client.post("/api/extract", files={"file": ("x.pdf", b"hello", "application/pdf")})
     assert r.status_code == 400
 
 
-def test_idoc_import_and_zugferd_without_source_pdf() -> None:
+def test_idoc_import_and_zugferd_without_source_pdf(client: TestClient) -> None:
     r = client.post("/api/erp/sap-ecc/idoc", files={"file": ("i.xml", SAMPLE_IDOC.read_bytes(), "application/xml")})
     assert r.status_code == 200, r.text
     inv = r.json()
@@ -64,7 +61,7 @@ def test_idoc_import_and_zugferd_without_source_pdf() -> None:
     assert b"0090001234" in xml
 
 
-def test_exports_are_archived_and_downloadable(invoice: Invoice) -> None:
+def test_exports_are_archived_and_downloadable(client: TestClient, invoice: Invoice) -> None:
     r = client.post(
         "/api/export/zugferd",
         data={"invoice": invoice.model_dump_json(), "source": "pdf", "source_name": "kunde.pdf"},

@@ -40,6 +40,12 @@ services:
     restart: unless-stopped
     environment:
       <<: *backend-env
+      # first admin, created only while the user table is empty
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-60}
+      SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-12}
     volumes:
       - ./backend/config:/app/config:ro  # company.yaml (own master data)
     depends_on:

@@ -34,6 +34,7 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
                 <th className="right">Brutto</th>
                 <th>Format</th>
                 <th>Quelle</th>
+                <th>Von</th>
                 <th />
               </tr>
             </thead>
@@ -46,6 +47,7 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
                   <td className="right">{Number(d.grand_total).toLocaleString("de-DE", { style: "currency", currency: d.currency })}</td>
                   <td>{d.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD"}</td>
                   <td title={d.source_name}>{SOURCE_LABEL[d.source] ?? d.source}</td>
+                  <td>{d.created_by || "–"}</td>
                   <td>
                     <a href={documentUrl(d.id)} download={d.filename}>Herunterladen</a>
                   </td>

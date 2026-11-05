@@ -106,3 +106,43 @@ input, select {
 .archive th.right, .archive td.right { text-align: right; font-variant-numeric: tabular-nums; }
 .archive td { padding: 6px 4px; font-size: 0.9rem; border-top: 1px solid var(--border); }
 .archive a { color: var(--accent); }
+
+/* --- shell / navigation --- */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 16px; }
+.topbar h1 { margin: 0; font-size: 1.3rem; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tabs button {
+  background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 7px 12px;
+  font: inherit; color: var(--muted); cursor: pointer;
+}
+.tabs button.active { color: var(--text); background: var(--surface); border-color: var(--border); font-weight: 600; }
+.usermenu { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.usermenu span { display: grid; text-align: right; line-height: 1.2; }
+.usermenu small { color: var(--muted); font-size: 0.75rem; }
+.usermenu button.secondary { margin-top: 0; }
+.intro { margin: 0 0 16px; color: var(--muted); }
+
+/* --- login --- */
+.auth-page { min-height: 80vh; display: grid; place-items: center; padding: 24px 16px; }
+.auth-card { width: min(380px, 100%); display: grid; gap: 14px; }
+.auth-card h1 { margin: 0; font-size: 1.3rem; }
+.auth-card .hint { margin: 0; }
+.auth-card .alert { margin: 0; }
+.auth-card button.secondary { margin-top: 0; }
+
+/* --- admin --- */
+.admin { display: grid; gap: 16px; }
+.admin > .tabs { margin-bottom: 4px; }
+.badge { margin-left: 6px; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; background: var(--info-bg); color: var(--accent); }
+tr.inactive td { opacity: 0.55; }
+tr.warn td { color: var(--warn); }
+td.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+td.actions button.secondary { margin-top: 0; padding: 4px 10px; font-size: 0.85rem; }
+td.detail { font-size: 0.8rem; color: var(--muted); }
+.admin table td { padding: 6px 4px; border-top: 1px solid var(--border); vertical-align: middle; }
+.field.checkbox { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 0.9rem; }
+.field.checkbox input { width: auto; }
+.field.end { align-content: end; }
+.field.end button.primary, button.primary.inline { width: auto; margin-top: 0; }
+.field.narrow { max-width: 260px; margin-bottom: 12px; }
+code { font-size: 0.85em; }
