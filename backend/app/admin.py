@@ -19,7 +19,7 @@ from . import auth
 from .auth import Role, current_session, require_admin
 from .company import Company
 from .db import AuditEntry, LoginSession, User, audit, get_session, get_setting, put_setting
-from .settings import IdocSettings, get_company, get_idoc_settings
+from .settings import IdocSettings, PdfInboxSettings, get_company, get_idoc_settings, get_pdf_inbox_settings
 from .worker import STATUS_KEY
 
 router = APIRouter(prefix="/api")
@@ -64,6 +64,7 @@ class UserUpdate(BaseModel):
 class Settings(BaseModel):
     company: Company
     idoc: IdocSettings
+    pdf_inbox: PdfInboxSettings = Field(default_factory=PdfInboxSettings)
 
 
 class AuditInfo(BaseModel):
@@ -182,7 +183,9 @@ def update_user(
 
 @router.get("/admin/settings", response_model=Settings)
 def read_settings(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> Settings:
-    return Settings(company=get_company(session), idoc=get_idoc_settings(session))
+    return Settings(
+        company=get_company(session), idoc=get_idoc_settings(session), pdf_inbox=get_pdf_inbox_settings(session)
+    )
 
 
 @router.put("/admin/settings", response_model=Settings)
@@ -191,11 +194,13 @@ def write_settings(
 ) -> Settings:
     put_setting(session, "company", body.company.model_dump(mode="json"), admin.username)
     put_setting(session, "idoc", body.idoc.model_dump(mode="json"), admin.username)
+    put_setting(session, "pdf_inbox", body.pdf_inbox.model_dump(mode="json"), admin.username)
     audit(
         session,
         admin.username,
         "settings_changed",
         idoc=body.idoc.model_dump(mode="json"),
+        pdf_inbox=body.pdf_inbox.model_dump(mode="json"),
         company=body.company.seller.name,
     )
     session.commit()
@@ -219,6 +224,7 @@ def read_audit(
         "password_reset",
         "settings_changed",
         "idoc_retry",
+        "review_discarded",
     ]
     | None = None,
     _: User = Depends(require_admin),
@@ -230,74 +236,95 @@ def read_audit(
     return list(session.scalars(stmt))
 
 
-# --- SAP IDoc inbox status (admin) ---------------------------------------------
+# --- inbox status: SAP IDocs + PDFs (admin) -----------------------------------
+
+InboxKind = Literal["idoc", "pdf"]
+INBOXES: dict[str, tuple[str, str, str]] = {  # kind -> (label, env var, default dir)
+    "idoc": ("SAP-IDocs", "IDOC_DIR", "./data/idoc"),
+    "pdf": ("PDF-Rechnungen", "PDF_DIR", "./data/pdf"),
+}
 
 
-class IdocErrorFile(BaseModel):
+class ErrorFile(BaseModel):
     name: str
     size: int
     modified_at: datetime
     reason: str
 
 
-class IdocStatus(BaseModel):
-    folder_available: bool  # is the IDoc folder mounted into the backend?
+class InboxInfo(BaseModel):
+    kind: InboxKind
+    label: str
+    folder_available: bool  # is the folder mounted into the backend?
+    counts: dict[str, int]  # files per folder: inbox, outbox, processed, error
+    errors: list[ErrorFile]
+
+
+class InboxStatus(BaseModel):
     worker_alive: bool
     worker: dict  # last report of the worker (see worker.report_status)
-    counts: dict[str, int]  # files per folder: inbox, outbox, processed, error
-    errors: list[IdocErrorFile]
+    inboxes: list[InboxInfo]
 
 
 class RetryRequest(BaseModel):
+    kind: InboxKind = "idoc"
     name: str = Field(max_length=255)
 
 
-def _idoc_base() -> Path:
-    return Path(os.environ.get("IDOC_DIR", "./data/idoc"))
+def _inbox_base(kind: str) -> Path:
+    _, env, default = INBOXES[kind]
+    return Path(os.environ.get(env, default))
 
 
 def _count(folder: Path) -> int:
-    return (
-        sum(1 for p in folder.iterdir() if p.is_file() and not p.name.endswith(".error.txt")) if folder.is_dir() else 0
-    )
+    if not folder.is_dir():
+        return 0
+    return sum(1 for p in folder.iterdir() if p.is_file() and not p.name.endswith(".error.txt"))
 
 
-@router.get("/admin/idoc/status", response_model=IdocStatus)
-def idoc_status(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> IdocStatus:
-    base = _idoc_base()
+def _errors(folder: Path) -> list[ErrorFile]:
+    if not folder.is_dir():
+        return []
+    files = [p for p in folder.iterdir() if p.is_file() and not p.name.endswith(".error.txt")]
+    result = []
+    for p in sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)[:100]:
+        reason_file = p.with_name(p.name + ".error.txt")
+        reason = reason_file.read_text(encoding="utf-8", errors="replace").strip() if reason_file.exists() else ""
+        st = p.stat()
+        result.append(
+            ErrorFile(name=p.name, size=st.st_size, modified_at=datetime.fromtimestamp(st.st_mtime, UTC), reason=reason)
+        )
+    return result
+
+
+@router.get("/admin/inbox/status", response_model=InboxStatus)
+def inbox_status(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> InboxStatus:
     worker = get_setting(session, STATUS_KEY) or {}
     alive = False
     if worker.get("last_round_at"):
         age = datetime.now(UTC) - datetime.fromisoformat(worker["last_round_at"])
         alive = age.total_seconds() < 3 * int(worker.get("interval_seconds", 10)) + 30
-    errors: list[IdocErrorFile] = []
-    error_dir = base / "error"
-    if error_dir.is_dir():
-        files = [p for p in error_dir.iterdir() if p.is_file() and not p.name.endswith(".error.txt")]
-        for p in sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)[:100]:
-            reason_file = p.with_name(p.name + ".error.txt")
-            reason = reason_file.read_text(encoding="utf-8", errors="replace").strip() if reason_file.exists() else ""
-            st = p.stat()
-            errors.append(
-                IdocErrorFile(
-                    name=p.name, size=st.st_size, modified_at=datetime.fromtimestamp(st.st_mtime, UTC), reason=reason
-                )
+    inboxes = []
+    for kind, (label, _, _) in INBOXES.items():
+        base = _inbox_base(kind)
+        inboxes.append(
+            InboxInfo(
+                kind=kind,  # type: ignore[arg-type]
+                label=label,
+                folder_available=(base / "inbox").is_dir(),
+                counts={name: _count(base / name) for name in ("inbox", "outbox", "processed", "error")},
+                errors=_errors(base / "error"),
             )
-    return IdocStatus(
-        folder_available=(base / "inbox").is_dir(),
-        worker_alive=alive,
-        worker=worker,
-        counts={name: _count(base / name) for name in ("inbox", "outbox", "processed", "error")},
-        errors=errors,
-    )
+        )
+    return InboxStatus(worker_alive=alive, worker=worker, inboxes=inboxes)
 
 
-@router.post("/admin/idoc/retry", status_code=204)
-def idoc_retry(
+@router.post("/admin/inbox/retry", status_code=204)
+def inbox_retry(
     body: RetryRequest, admin: User = Depends(require_admin), session: Session = Depends(get_session)
 ) -> Response:
-    """Move a failed IDoc back into the inbox (e.g. after fixing master data or the mapping)."""
-    base = _idoc_base()
+    """Move a failed file back into its inbox (e.g. after fixing master data or a template)."""
+    base = _inbox_base(body.kind)
     if Path(body.name).name != body.name or body.name.endswith(".error.txt"):
         raise HTTPException(400, "Ungültiger Dateiname.")
     src = base / "error" / body.name
@@ -311,6 +338,6 @@ def idoc_retry(
     shutil.move(str(src), target)
     os.utime(target, (time.time() - 60, time.time() - 60))  # ready for the worker right away
     src.with_name(src.name + ".error.txt").unlink(missing_ok=True)
-    audit(session, admin.username, "idoc_retry", file=body.name)
+    audit(session, admin.username, "idoc_retry", file=body.name, inbox=body.kind)
     session.commit()
     return Response(status_code=204)
