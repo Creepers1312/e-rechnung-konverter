@@ -240,17 +240,86 @@ def extract_lines(
     return lines, warnings
 
 
+# "D-79618", "A-1010", "CH-4310": vehicle registration style prefixes -> ISO 3166 codes
+POSTCODE_PREFIX = {
+    "D": "DE",
+    "A": "AT",
+    "CH": "CH",
+    "F": "FR",
+    "I": "IT",
+    "B": "BE",
+    "NL": "NL",
+    "L": "LU",
+    "PL": "PL",
+    "CZ": "CZ",
+    "DK": "DK",
+    "S": "SE",
+    "E": "ES",
+    "P": "PT",
+    "H": "HU",
+    "SK": "SK",
+}
+COUNTRY_NAMES = {
+    "deutschland": "DE",
+    "germany": "DE",
+    "österreich": "AT",
+    "oesterreich": "AT",
+    "austria": "AT",
+    "schweiz": "CH",
+    "switzerland": "CH",
+    "frankreich": "FR",
+    "france": "FR",
+    "italien": "IT",
+    "italy": "IT",
+    "niederlande": "NL",
+    "netherlands": "NL",
+    "belgien": "BE",
+    "belgium": "BE",
+    "luxemburg": "LU",
+    "polen": "PL",
+    "poland": "PL",
+    "tschechien": "CZ",
+    "czech republic": "CZ",
+    "dänemark": "DK",
+    "schweden": "SE",
+    "sweden": "SE",
+    "spanien": "ES",
+    "spain": "ES",
+    "ungarn": "HU",
+    "slowakei": "SK",
+}
+# return address above the window: "Firma GmbH, Straße 2, D-79618 Ort" (or with "·" / "|")
+RETURN_LINE = re.compile(r"[,·|].*\b(?:[A-Z]{1,2}-)?\d{4,5}\s+\S")
+
+
 def extract_buyer(cfg: dict[str, Any], pdf: PdfText, seller_name: str) -> Party:
     region = cfg.get("buyer_region")
     block = pdf.region_text(tuple(region)) if region else ""  # type: ignore[arg-type]
     rows = [r.strip() for r in block.splitlines() if r.strip()]
     seller_key = seller_name.lower()[:12]
-    rows = [r for r in rows if not (seller_key and seller_key in r.lower())]
+    rows = [r for r in rows if not (seller_key and seller_key in r.lower()) and not RETURN_LINE.search(r)]
 
     party = Party()
     pc_index = next((i for i, r in enumerate(rows) if POSTCODE_CITY.match(r)), None)
     if pc_index is None:
         return party
+    m = POSTCODE_CITY.match(rows[pc_index])
+    assert m
+    country = POSTCODE_PREFIX.get(m["cc"] or "D", m["cc"] or "DE")
+    # a country line right below "PLZ Ort" wins over the prefix
+    if pc_index + 1 < len(rows) and rows[pc_index + 1].strip().lower() in COUNTRY_NAMES:
+        country = COUNTRY_NAMES[rows[pc_index + 1].strip().lower()]
+    # Typical block: name, [extra lines like "z. Hd. ..."], street, postcode + city
+    names = rows[: max(pc_index - 1, 0)]
+    party.name = names[0] if names else ""
+    party.address = Address(
+        line1=rows[pc_index - 1] if pc_index >= 1 else "",
+        line2=" ".join(names[1:]),
+        postcode=m["postcode"],
+        city=m["city"].strip(),
+        country_code=country,
+    )
+    return party
     m = POSTCODE_CITY.match(rows[pc_index])
     assert m
     # Typical block: name, [extra lines like "z. Hd. ..."], street, postcode + city
