@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,8 @@ TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 AMOUNT = r"-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2}"
 DATE = r"\d{1,2}\.\d{1,2}\.\d{2,4}"
+NUMBER = r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?"  # quantities: 1.000 / 23,820 / 23.820 (OCR)
+SEP = r"[ \t]*:?[ \t]*"  # between label and value, never across a line break
 POSTCODE_CITY = re.compile(r"^(?:(?P<cc>[A-Z]{1,2})-)?(?P<postcode>\d{4,5})\s+(?P<city>.+)$")
 
 
@@ -36,6 +38,7 @@ class ExtractionResult(BaseModel):
     template_name: str
     warnings: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)  # informational, e.g. "filled from address book"
+    ocr: bool = False  # text came from OCR (scanned PDF)
     raw_text: str = ""
 
 
@@ -86,8 +89,16 @@ def select_template(text: str, generic: Template, layouts: list[Template]) -> Te
     return generic
 
 
+# wrapped in (?:...) so a placeholder's own alternatives ("|") cannot split the surrounding pattern
+PLACEHOLDERS = {
+    key: f"(?:{value})" for key, value in {"{AMOUNT}": AMOUNT, "{DATE}": DATE, "{NUMBER}": NUMBER, "{SEP}": SEP}.items()
+}
+
+
 def _compile(pattern: str, flags: int = 0) -> re.Pattern[str]:
-    return re.compile(pattern.replace("{AMOUNT}", AMOUNT).replace("{DATE}", DATE), flags | re.IGNORECASE)
+    for key, value in PLACEHOLDERS.items():
+        pattern = pattern.replace(key, value)
+    return re.compile(pattern, flags | re.IGNORECASE)
 
 
 def _value(m: re.Match[str]) -> str | None:
@@ -138,36 +149,80 @@ def _unit_code(cfg: dict[str, Any], unit: str | None) -> str:
     return units.get(unit.lower().rstrip("."), "H87")
 
 
-def extract_lines(cfg: dict[str, Any], text: str, default_rate: Decimal) -> tuple[list[LineItem], list[str]]:
-    lcfg = cfg.get("lines") or {}
-    pattern = _compile(lcfg["pattern"]) if lcfg.get("pattern") else None
-    if pattern is None:
-        return [], ["Vorlage enthält kein Positionsmuster."]
+def _quantity_candidates(value: str | None) -> list[Decimal]:
+    """Possible readings of a printed quantity, most likely first.
+
+    "1.000,5" and "23,820" are unambiguous. "23.820" is not: German thousands
+    separator (23820) or a comma misread by OCR (23.82)? Both are returned and the
+    caller picks the one that matches the printed amounts.
+    """
+    if value is None:
+        return []
+    v = value.strip()
+    if "," not in v and re.fullmatch(r"\d{1,3}\.\d{3}", v):
+        return [d for d in (_dec(v.replace(".", ",")), _dec(v.replace(".", ""))) if d is not None]
+    d = _dec(v)
+    return [d] if d is not None else []
+
+
+def _pick_quantity(candidates: list[Decimal], price: Decimal, target: Decimal | None) -> Decimal:
+    if target is not None:
+        for c in candidates:
+            if abs(round2(c * price) - target) <= Decimal("0.01"):
+                return c
+    return candidates[0]
+
+
+def _line_region(lcfg: dict[str, Any], text: str, *, include_start: bool) -> str:
+    rows = text.splitlines()
     start = _compile(lcfg["start"]) if lcfg.get("start") else None
     end = _compile(lcfg["end"]) if lcfg.get("end") else None
-
-    rows = text.splitlines()
-    if start and any(start.search(r) for r in rows):
-        rows = rows[next(i for i, r in enumerate(rows) if start.search(r)) + 1 :]
+    if start:
+        first = next((i for i, r in enumerate(rows) if start.search(r)), None)
+        if first is not None:
+            rows = rows[first if include_start else first + 1 :]
     if end:
-        cut = next((i for i, r in enumerate(rows) if end.search(r)), None)
+        cut = next((i for i, r in enumerate(rows) if i > 0 and end.search(r)), None)
         if cut is not None:
             rows = rows[:cut]
+    return "\n".join(rows)
+
+
+def extract_lines(
+    cfg: dict[str, Any], text: str, default_rate: Decimal, net_total: Decimal | None = None
+) -> tuple[list[LineItem], list[str]]:
+    lcfg = cfg.get("lines") or {}
+    if lcfg.get("block_pattern"):
+        # one item spread over several lines: search the whole region
+        region = _line_region(lcfg, text, include_start=True)
+        matches = list(_compile(lcfg["block_pattern"], re.MULTILINE).finditer(region))
+    elif lcfg.get("pattern"):
+        pattern = _compile(lcfg["pattern"])
+        region = _line_region(lcfg, text, include_start=False)
+        matches = [m for row in region.splitlines() if (m := pattern.match(row.strip()))]
+    else:
+        return [], ["Vorlage enthält kein Positionsmuster."]
 
     lines: list[LineItem] = []
     warnings: list[str] = []
-    for row in rows:
-        m = pattern.match(row.strip())
-        if not m:
-            continue
+    for m in matches:
         g = m.groupdict()
-        qty, price, total = _dec(g.get("quantity")), _dec(g.get("unit_price")), _dec(g.get("total"))
-        if qty is None or price is None:
+        candidates, price, total = (
+            _quantity_candidates(g.get("quantity")),
+            _dec(g.get("unit_price")),
+            _dec(g.get("total")),
+        )
+        if not candidates or price is None or not (g.get("name") or "").strip():
             continue
+        # without a line total, a single-item invoice can be checked against the printed net total
+        qty = _pick_quantity(
+            candidates, price, total if total is not None else (net_total if len(matches) == 1 else None)
+        )
         rate = _dec(g.get("vat_rate")) or default_rate
         item = LineItem(
             id=g.get("id") or str(len(lines) + 1),
-            name=g["name"].strip(),
+            name=" ".join(g["name"].split()),
+            seller_item_id=(g.get("article") or "").strip(),
             quantity=qty,
             unit_code=_unit_code(cfg, g.get("unit")),
             unit_price=price,
@@ -221,7 +276,16 @@ def extract(pdf: PdfText, company: Company, templates_dir: Path = TEMPLATE_DIR) 
     defaults = cfg.get("defaults") or {}
     default_rate = _dec(_find(cfg, "vat_rate", text)) or Decimal(str(defaults.get("vat_rate", 19)))
 
-    lines, line_warnings = extract_lines(cfg, text, default_rate)
+    # Totals: the last match is the final figure (earlier ones may be subtotals).
+    # Tax is only compared with a single tax line; mixed rates print several.
+    nets, taxes, grosses = (_find_all(cfg, f, text) for f in ("total_net", "total_tax", "total_gross"))
+    stated = StatedTotals(
+        net=_dec(nets[-1]) if nets else None,
+        tax=_dec(taxes[0]) if len(taxes) == 1 else None,
+        gross=_dec(grosses[-1]) if grosses else None,
+    )
+
+    lines, line_warnings = extract_lines(cfg, text, default_rate, stated.net)
     warnings += line_warnings
 
     buyer = extract_buyer(cfg, pdf, company.seller.name)
@@ -246,26 +310,35 @@ def extract(pdf: PdfText, company: Company, templates_dir: Path = TEMPLATE_DIR) 
         lines=lines,
         payment=payment,
     )
+    notes: list[str] = []
+    if invoice.payment.due_date is None and invoice.issue_date:
+        days = [int(d) for d in _find_all(cfg, "due_days", text) if d.isdigit()]
+        if days:
+            invoice.payment.due_date = invoice.issue_date + timedelta(days=max(days))
+            notes.append(f"Fälligkeit aus Zahlungsziel berechnet: {max(days)} Tage nach Rechnungsdatum.")
+
     if not invoice.number:
         warnings.append("Rechnungsnummer nicht erkannt.")
     if not invoice.issue_date:
         warnings.append("Rechnungsdatum nicht erkannt.")
     if not text.strip():
-        warnings.append("Das PDF enthält keinen Text (Scan?). Texterkennung (OCR) ist noch nicht eingebaut.")
+        warnings.append("Das PDF enthält keinen lesbaren Text (Scan?) und die Texterkennung (OCR) war nicht verfügbar.")
+    elif pdf.ocr:
+        notes.append("Gescanntes PDF – Text per OCR erkannt. Werte bitte besonders sorgfältig prüfen.")
+    seller_words = [w for w in re.findall(r"\w{4,}", company.seller.name) if w.lower() not in ("gmbh", "mbh")]
+    if text.strip() and seller_words and not any(w.lower() in text.lower() for w in seller_words[:2]):
+        warnings.append(
+            f"Absender im PDF passt nicht zu den eigenen Firmendaten („{company.seller.name}“). "
+            "Bitte unter Verwaltung → Einstellungen prüfen."
+        )
 
-    # Totals: the last match is the final figure (earlier ones may be subtotals).
-    # Tax is only compared with a single tax line; mixed rates print several.
-    nets, taxes, grosses = (_find_all(cfg, f, text) for f in ("total_net", "total_tax", "total_gross"))
-    stated = StatedTotals(
-        net=_dec(nets[-1]) if nets else None,
-        tax=_dec(taxes[0]) if len(taxes) == 1 else None,
-        gross=_dec(grosses[-1]) if grosses else None,
-    )
     return ExtractionResult(
         invoice=invoice,
         stated_totals=stated,
         template_id=tpl.id,
         template_name=tpl.name,
         warnings=warnings,
+        notes=notes,
         raw_text=text,
+        ocr=pdf.ocr,
     )

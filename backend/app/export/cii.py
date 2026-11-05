@@ -120,7 +120,10 @@ def build_cii(invoice: Invoice, profile: Profile = "zugferd") -> bytes:
     for line in invoice.lines:
         item = _sub(tx, "ram:IncludedSupplyChainTradeLineItem")
         _sub(_sub(item, "ram:AssociatedDocumentLineDocument"), "ram:LineID", line.id)
-        _sub(_sub(item, "ram:SpecifiedTradeProduct"), "ram:Name", line.name)
+        product = _sub(item, "ram:SpecifiedTradeProduct")
+        if line.seller_item_id:
+            _sub(product, "ram:SellerAssignedID", line.seller_item_id)
+        _sub(product, "ram:Name", line.name)
         agreement = _sub(item, "ram:SpecifiedLineTradeAgreement")
         _sub(_sub(agreement, "ram:NetPriceProductTradePrice"), "ram:ChargeAmount", _number(line.unit_price))
         delivery = _sub(item, "ram:SpecifiedLineTradeDelivery")

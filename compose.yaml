@@ -5,6 +5,7 @@
 #   worker    SAP ECC IDoc inbox -> e-invoices          (no internet access)
 #   db        PostgreSQL archive of all e-invoices      (internal only)
 #   backup    daily pg_dump of the database             (no internet access)
+#   ocr       OCRmyPDF/Tesseract for scanned PDFs       (no internet access)
 #
 # Network "web" connects frontend and backend; network "data" (internal, no
 # internet) connects backend, worker and db. The frontend cannot reach the db.
@@ -22,6 +23,7 @@ name: erechnung
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-erechnung}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-erechnung}
+  OCR_URL: http://ocr:8000
 
 services:
   db:
@@ -107,6 +109,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks: [data]
+
+  ocr:
+    build: ./ocr
+    image: ${COMPOSE_PROJECT_NAME:-erechnung}-ocr:latest
+    restart: unless-stopped
+    environment:
+      OCR_LANG: ${OCR_LANG:-deu+eng}
+      OCR_PARALLEL: ${OCR_PARALLEL:-2}
     networks: [data]
 
   frontend:

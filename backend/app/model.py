@@ -69,6 +69,7 @@ VatCategory = Literal["S", "Z", "E", "AE", "K", "G"]
 class LineItem(BaseModel):
     id: str = "1"  # BT-126
     name: str = ""  # BT-153
+    seller_item_id: str = ""  # BT-155, e.g. SAP material number
     quantity: Amount = Decimal("1")  # BT-129
     unit_code: str = "H87"  # UN/ECE Rec 20 (H87 piece, HUR hour, C62 one, ...)
     unit_price: Amount = Decimal("0")  # net price per unit (BT-146)

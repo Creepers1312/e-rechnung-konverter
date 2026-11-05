@@ -1,0 +1,23 @@
+# SAP SD invoice layout of Rheinfelden Carbon Products GmbH (scanned or printed).
+# Header fields ("Rechnungs-Nr. / Datum", "Lieferschein-Nr. / Datum", "Ihre Bestellung",
+# "Zahlungsbedingungen", "Nettosumme", "MwSt. Total", "Zu zahlender Gesamtbetrag")
+# are covered by _generic.yaml; this template adds the item block:
+#
+#   Materialnummer 3-31004809
+#   Beschreibung   Soederbergmasse Limak 50 Plus
+#   Bruttogewicht  Nettogewicht  Preis / 1 TO
+#   23,820 TO      23,820 TO     1.009,00 EUR
+#
+# The net weight is the billed quantity.
+
+id: rheinfelden-carbon
+name: Rheinfelden Carbon Products (SAP-Rechnung)
+
+match:
+  any:
+    - 'Rheinfelden Carbon Products'
+
+lines:
+  start: '^\s*Materialnummer'
+  end: '^\s*(?:Bemerkung|Zu\s+zahlender)'
+  block_pattern: '^[ \t]*Materialnummer[ \t]+(?P<article>\S+)[^\n]*\n[ \t]*Beschreibung[ \t]+(?P<name>[^\n]+?)[ \t]*\n(?:[^\n]*\n){0,2}?[ \t]*{NUMBER}[ \t]*(?:TO|T|KG|ST)\b[ \t]+(?P<quantity>{NUMBER})[ \t]*(?P<unit>TO|T|KG|ST)\b[ \t]+(?P<unit_price>{AMOUNT})'

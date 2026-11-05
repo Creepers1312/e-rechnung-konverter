@@ -28,9 +28,9 @@ from .db import Document, User, archive, audit, get_engine, get_session, search_
 from .erp.sap_ecc_idoc import parse_invoic02
 from .export.cii import Profile, build_cii
 from .export.zugferd import check_xsd
-from .extraction.pdf_text import PdfText
 from .extraction.rules import ExtractionResult, extract
 from .model import Invoice, Party, Totals, compute_totals
+from .ocr import text_of_pdf
 from .settings import get_company
 from .validation import Issue, StatedTotals, validate
 
@@ -166,7 +166,10 @@ async def extract_pdf(
     data = await _read(file)
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "Keine PDF-Datei.")
-    result = extract(PdfText.from_bytes(data), get_company(session))
+    pdf, ocr_problem = text_of_pdf(data, file.filename or "scan.pdf")
+    result = extract(pdf, get_company(session))
+    if ocr_problem:
+        result.warnings.insert(0, ocr_problem)
     result.notes += _filled_note(customers.fill(session, result.invoice))
     return result
 
