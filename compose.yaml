@@ -9,9 +9,14 @@
 # Network "web" connects frontend and backend; network "data" (internal, no
 # internet) connects backend, worker and db. The frontend cannot reach the db.
 #
-# Start:  cp .env.example .env   (set POSTGRES_PASSWORD)
+# Start:  ./deploy.sh            (recommended: creates .env, folders, starts, checks)
+#   or:   cp .env.example .env   (set POSTGRES_PASSWORD)
 #         docker compose up -d --build
 #         -> http://localhost:8080
+#
+# Optional overlays (set COMPOSE_FILE in .env, deploy.sh does this for you):
+#   deploy/compose.https.yaml   bundled Caddy with automatic HTTPS (ports 80/443)
+#   deploy/compose.proxy.yaml   behind an existing Docker reverse proxy (Traefik, NPM, nginx-proxy)
 
 name: erechnung
 
@@ -37,7 +42,7 @@ services:
 
   backend:
     build: ./backend
-    image: erechnung-backend:latest
+    image: ${COMPOSE_PROJECT_NAME:-erechnung}-backend:latest
     restart: unless-stopped
     environment:
       <<: *backend-env
@@ -57,7 +62,7 @@ services:
     networks: [web, data]
 
   worker:
-    image: erechnung-backend:latest  # same image as backend, different command
+    image: ${COMPOSE_PROJECT_NAME:-erechnung}-backend:latest  # same image as backend, different command
     command: ["python", "-m", "app.worker"]
     restart: unless-stopped
     environment:
@@ -106,9 +111,11 @@ services:
 
   frontend:
     build: ./frontend
+    image: ${COMPOSE_PROJECT_NAME:-erechnung}-frontend:latest
     restart: unless-stopped
     ports:
-      - "${HTTP_PORT:-8080}:80"
+      # HTTP_BIND=127.0.0.1 keeps the port local (e.g. behind a reverse proxy on the host)
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy

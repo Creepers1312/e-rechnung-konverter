@@ -1,0 +1,39 @@
+# Overlay: behind an existing reverse proxy that runs as a Docker container
+# (Traefik, Nginx Proxy Manager, nginx-proxy/acme-companion, Caddy, ...).
+# The frontend joins the proxy's Docker network and publishes no port itself.
+#   COMPOSE_FILE=compose.yaml:deploy/compose.proxy.yaml   (in .env)
+#   PROXY_NETWORK=<name of the proxy's network>          (docker network ls)
+#
+# Target for the proxy:  http://<COMPOSE_PROJECT_NAME>-web:80
+#   - Nginx Proxy Manager: add a Proxy Host with that host name and port 80
+#   - Traefik:             labels below (TRAEFIK_ENABLE=true, DOMAIN, TRAEFIK_ENTRYPOINT, TRAEFIK_CERTRESOLVER)
+#   - nginx-proxy:         VIRTUAL_HOST / LETSENCRYPT_HOST below (DOMAIN)
+
+services:
+  frontend:
+    ports: !reset []
+    networks:
+      web: {}
+      proxy:
+        aliases:
+          - ${COMPOSE_PROJECT_NAME:-erechnung}-web
+    environment:
+      # nginx-proxy / acme-companion
+      VIRTUAL_HOST: ${DOMAIN:-}
+      VIRTUAL_PORT: "80"
+      LETSENCRYPT_HOST: ${DOMAIN:-}
+    labels:  # list form, so the router name (project name) is interpolated
+      - "traefik.enable=${TRAEFIK_ENABLE:-false}"
+      - "traefik.docker.network=${PROXY_NETWORK:-proxy}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-erechnung}.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-erechnung}.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-erechnung}.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-erechnung}.loadbalancer.server.port=80"
+  backend:
+    environment:
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}  # the proxy terminates HTTPS
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?PROXY_NETWORK fehlt in .env}
