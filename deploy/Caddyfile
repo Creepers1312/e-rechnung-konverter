@@ -1,4 +1,5 @@
 # Used by deploy/compose.https.yaml. Caddy obtains and renews the certificate itself.
+# DOMAIN and ACME_EMAIL come from .env (both required).
 {
 	email {$ACME_EMAIL}
 }

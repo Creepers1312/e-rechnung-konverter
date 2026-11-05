@@ -35,6 +35,10 @@ comments and identifiers are English.
    (PostgreSQL), backup (`backup/backup.sh`, pg_dump). Network `data` is
    internal: worker, db and backup have no internet. The IDoc folder is mounted
    into worker (processing) and backend (admin status/retry).
+   `deploy.sh` installs/updates; overlays in `deploy/` (Caddy HTTPS, existing
+   Docker proxy) are selected via `COMPOSE_FILE` in `.env`. Everything is
+   namespaced by `COMPOSE_PROJECT_NAME` – never hard-code container, network,
+   volume or image names (other stacks may share the host).
    Locally without Docker the backend falls back to SQLite.
 8. **Export only when valid**: export endpoints re-run validation and return 422
    with the issues. CII element order follows the XSD — check `check_xsd` after

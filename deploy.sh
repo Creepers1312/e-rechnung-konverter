@@ -65,7 +65,11 @@ confirm() {  # confirm "Frage" (Standard: ja); ohne Terminal und ohne --yes: nei
   local a; read -r -p "  $1 [J/n]: " a </dev/tty
   [[ ! "$a" =~ ^[nN] ]]
 }
-random() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1"; }
+random() {  # random A-Za-z0-9 string; reads a fixed block first (no SIGPIPE under pipefail)
+  local s=""
+  while [ "${#s}" -lt "$1" ]; do s+=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9'); done
+  printf '%s' "${s:0:$1}"
+}
 
 # .env lesen/schreiben (ohne die Datei als Shell-Skript auszuführen)
 env_get() { [ -f .env ] && grep -E "^$1=" .env | tail -n1 | cut -d= -f2- || true; }
@@ -127,7 +131,6 @@ compose() { "${DOCKER[@]}" compose "$@"; }
 
 # =============================================================================
 if [ -f .env ]; then
-  FIRST_INSTALL=false
   step "Bestehende Installation gefunden – Update"
   PROJECT=$(env_get COMPOSE_PROJECT_NAME); PROJECT=${PROJECT:-erechnung}
   ok "Projekt: $PROJECT (Einstellungen aus .env bleiben erhalten)"
@@ -148,7 +151,6 @@ if [ -f .env ]; then
     fi
   fi
 else
-  FIRST_INSTALL=true
   step "Erstinstallation – Einstellungen"
 
   PROJECT=$(ask "Projektname (eindeutig auf diesem Server)" "${COMPOSE_PROJECT_NAME:-erechnung}")
@@ -171,12 +173,12 @@ else
 
   cp .env.example .env
   chmod 600 .env
+  trap 'rm -f .env; echo "  (unvollständige .env entfernt – einfach erneut starten)" >&2' EXIT
   env_set COMPOSE_PROJECT_NAME "$PROJECT"
   env_set POSTGRES_PASSWORD "$(random 32)"
   ADMIN_USER_VALUE=$(ask "Benutzername des ersten Administrators" "${ADMIN_USER:-admin}")
-  ADMIN_PW=$(random 16)
   env_set ADMIN_USER "$ADMIN_USER_VALUE"
-  env_set ADMIN_PASSWORD "$ADMIN_PW"
+  env_set ADMIN_PASSWORD "$(random 16)"
 
   case "$MODE" in
     port)
@@ -199,7 +201,9 @@ else
       for p in 80 443; do port_in_use "$p" && die "Port $p ist belegt (läuft schon ein Webserver/Proxy? Dann Betriebsart 3 wählen)."; done
       getent hosts "$domain" >/dev/null || warn "$domain lässt sich (noch) nicht auflösen – ohne DNS-Eintrag gibt es kein Zertifikat."
       env_set DOMAIN "$domain"
-      env_set ACME_EMAIL "$(ask "E-Mail für Let's Encrypt (optional)" "${ACME_EMAIL:-}")"
+      email=$(ask "E-Mail für Let's Encrypt (Warnungen zu Zertifikaten)" "${ACME_EMAIL:-}")
+      [[ "$email" == *@*.* ]] || die "Für HTTPS wird eine gültige E-Mail-Adresse benötigt (ACME_EMAIL)."
+      env_set ACME_EMAIL "$email"
       env_set COOKIE_SECURE true
       env_set COMPOSE_FILE "compose.yaml:deploy/compose.https.yaml"
       ;;
@@ -230,7 +234,17 @@ else
   chmod 700 "$backups"
   ok ".env angelegt (Passwörter zufällig erzeugt, Datei nur für den Besitzer lesbar)"
   ok "Ordner: IDocs in $idoc, Sicherungen in $backups"
+  trap - EXIT  # .env is complete from here on
 fi
+
+# Initial admin password not shown yet (e.g. the first start failed)? Show it after this run.
+ADMIN_PW=$(env_get ADMIN_PASSWORD)
+
+# From here on .env is the single source of truth: environment variables were only
+# inputs for the questions above, and Compose would otherwise let them override .env.
+while IFS='=' read -r key _; do
+  [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] && unset "$key"
+done < .env
 
 MODE_NOW=$(env_get COMPOSE_FILE)
 case "$MODE_NOW" in *https*) MODE=https ;; *proxy*) MODE=proxy ;; *) MODE=port ;; esac
@@ -264,11 +278,23 @@ case "$MODE" in
     host=$([ "$bind" = 127.0.0.1 ] && echo 127.0.0.1 || hostname -I 2>/dev/null | awk '{print $1}')
     URL="http://${host:-localhost}:${port}"
     ;;
-  https) URL="https://$(env_get DOMAIN)" ;;
+  https)
+    domain=$(env_get DOMAIN); URL="https://$domain"
+    # ask Caddy directly (no DNS needed); a fresh certificate can take a few seconds
+    https_ok=false
+    for _ in 1 2 3 4 5 6; do
+      if curl --noproxy '*' -fsSk --resolve "$domain:443:127.0.0.1" "https://$domain/api/health" >/dev/null 2>&1; then
+        https_ok=true; break
+      fi
+      sleep 5
+    done
+    if $https_ok; then ok "HTTPS über Caddy antwortet"
+    else warn "HTTPS antwortet noch nicht – DNS-Eintrag und 'docker compose logs caddy' prüfen."; fi
+    ;;
   proxy) d=$(env_get DOMAIN); URL=${d:+https://$d}; URL=${URL:-"(im Reverse-Proxy einrichten)"} ;;
 esac
 
-if $FIRST_INSTALL; then
+if [ -n "$ADMIN_PW" ]; then
   # The admin exists now; do not keep the initial password lying around in .env.
   env_set ADMIN_PASSWORD ""
 fi
@@ -277,7 +303,7 @@ fi
 step "Fertig"
 # =============================================================================
 echo "  Adresse:      ${B}$URL${N}"
-if $FIRST_INSTALL; then
+if [ -n "$ADMIN_PW" ]; then
   echo "  Anmeldung:    ${B}$(env_get ADMIN_USER)${N} / ${B}$ADMIN_PW${N}"
   echo "                ${Y}Jetzt notieren – das Passwort wird nicht gespeichert und muss bei der ersten"
   echo "                Anmeldung geändert werden.${N}"
