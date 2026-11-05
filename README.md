@@ -9,6 +9,23 @@ Webapp, die Rechnungen in E-Rechnungen nach EN 16931 umwandelt:
 Ablauf: Datei hochladen → Felder werden regelbasiert erkannt → im Formular prüfen
 und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterladen.
 
+**Komfortfunktionen**
+
+- **Stapelverarbeitung:** mehrere PDFs/IDocs auf einmal hochladen – fehlerfreie werden
+  sofort umgewandelt, nur die mit Fehlern müssen geöffnet und korrigiert werden;
+  alle Ergebnisse als ZIP.
+- **PDF-Vorschau** neben dem Prüfformular (abschaltbar, die Einstellung wird gemerkt).
+- **Käufer-Adressbuch:** jede erzeugte E-Rechnung merkt sich den Käufer (über die
+  Kundennummer, sonst den Namen). Fehlen bei der nächsten Rechnung z. B.
+  E-Rechnungs-Adresse oder Leitweg-ID, werden sie automatisch ergänzt – auch beim
+  SAP-Worker. Vorhandene Werte werden nie überschrieben. Manuelle Suche über
+  „Aus Adressbuch übernehmen“ im Käufer-Bereich.
+- **Archiv-Suche:** nach Rechnungsnummer/Käufer, Zeitraum, Format und Quelle; Blättern;
+  mehrere Einträge als ZIP herunterladen.
+- **SAP-Eingang (Admin):** Status des Workers, Dateien je Ordner, fehlgeschlagene IDocs
+  mit Fehlergrund und „Erneut verarbeiten“.
+- **Automatische Datenbank-Backups** (siehe „Backup & Wiederherstellung“).
+
 > Rechtlicher Hinweis: Eine E-Rechnung muss vom **Rechnungssteller** ausgestellt
 > werden. Die App ist dafür gedacht, die *eigenen* Rechnungen umzuwandeln.
 > Fragen zur Pflicht und zur Archivierung (GoBD) bitte mit der Steuerberatung klären.
@@ -23,6 +40,7 @@ Jeder Teil läuft in einem eigenen Container:
 | `backend` | FastAPI (Erkennung, Prüfung, Export) | nein |
 | `worker` | überwacht den SAP-IDoc-Eingangsordner, wandelt automatisch um | nein, ohne Internet |
 | `db` | PostgreSQL: Archiv aller erzeugten E-Rechnungen | nein |
+| `backup` | tägliche Datenbanksicherung (`pg_dump`) nach `./backups` | nein, ohne Internet |
 
 Netzwerke: `web` (frontend ↔ backend) und `data` (backend, worker, db; intern,
 ohne Internetzugang). Die Oberfläche kann die Datenbank also nicht direkt erreichen.
@@ -86,6 +104,30 @@ davor (z. B. vorhandener Firmen-Proxy, Caddy oder Traefik) und in `.env`
 Die Firmendaten und Konnektor-Einstellungen werden nach dem ersten Speichern in
 der Datenbank gehalten; `company.yaml` und `IDOC_PROFILE`/`IDOC_INTERVAL` sind
 nur noch Startwerte.
+
+## Backup & Wiederherstellung
+
+Der Dienst `backup` sichert die Datenbank beim Start (falls es für heute noch keine
+Sicherung gibt) und danach täglich ab `BACKUP_TIME` (UTC) nach `BACKUP_HOST_DIR`
+(Standard `./backups`). Sicherungen älter als `BACKUP_KEEP_DAYS` Tage werden gelöscht.
+Der Container gilt als „unhealthy“, wenn die neueste Sicherung älter als 26 Stunden ist.
+
+```bash
+docker compose exec backup /bin/sh /backup.sh now   # sofort sichern
+ls backups/                                         # erechnung-JJJJ-MM-TT_HHMMSS.dump
+```
+
+**Wiederherstellen** (überschreibt die aktuelle Datenbank):
+
+```bash
+docker compose stop backend worker
+docker compose exec backup pg_restore --clean --if-exists --no-owner -d erechnung /backups/<datei>.dump
+docker compose start backend worker
+```
+
+Den Backup-Ordner zusätzlich auf ein anderes System kopieren (NAS, Bandsicherung …) –
+eine Sicherung auf derselben Festplatte schützt nicht vor deren Ausfall.
+Die IDoc-Ordner (`data/idoc`) gehören ebenfalls in die normale Dateisicherung.
 
 ## Lokale Entwicklung ohne Docker
 
@@ -166,10 +208,12 @@ backend/
   app/auth.py               Anmeldung, Sitzungen, Rollen, Schutz gegen Passwort-Raten
   app/admin.py              Endpunkte für Anmeldung und Verwaltung (/api/auth, /api/admin)
   app/settings.py           Einstellungen aus der Datenbank (Firmendaten, SAP-Konnektor)
+  app/customers.py          Käufer-Adressbuch (merken, ergänzen, suchen)
   app/manage.py             Kommandozeile: Admin anlegen, Passwort zurücksetzen
   app/main.py               FastAPI-Endpunkte (Umwandeln, Archiv)
 frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export, Archiv)
-compose.yaml                frontend, backend, worker, db
+compose.yaml                frontend, backend, worker, db, backup
+backup/backup.sh            Sicherungsskript des backup-Dienstes
 samples/                    Beispiel-PDF und Beispiel-IDoc
 scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 ```
@@ -197,5 +241,6 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [ ] Texterkennung (OCR) für eingescannte PDFs
 - [ ] Rabatte und Zuschläge (Allowances/Charges), Teilzahlungen, Skonto
 - [x] Anmeldung mit Rollen (Admin / Benutzer), Protokoll
+- [x] Stapelverarbeitung, PDF-Vorschau, Käufer-Adressbuch, Archiv-Suche, SAP-Eingang-Status, Backups
 - [ ] Firmen-Login (Microsoft Entra ID / SSO), Mandanten
 - [ ] GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)

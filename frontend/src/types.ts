@@ -73,6 +73,7 @@ export interface ExtractionResult {
   template_id: string;
   template_name: string;
   warnings: string[];
+  notes: string[];
   raw_text: string;
 }
 
@@ -152,4 +153,56 @@ export interface AuditEntry {
   username: string;
   action: string;
   detail: Record<string, unknown>;
+}
+
+export interface ImportResult {
+  invoice: Invoice;
+  notes: string[];
+}
+
+export interface DocumentPage {
+  items: ArchivedDocument[];
+  total: number;
+}
+
+export interface DocumentFilter {
+  q?: string;
+  date_from?: string;
+  date_to?: string;
+  profile?: Profile | "";
+  source?: "pdf" | "idoc" | "manual" | "";
+  offset?: number;
+  limit?: number;
+}
+
+export interface CustomerInfo {
+  id: number;
+  name: string;
+  party: Party;
+  buyer_reference: string;
+  updated_at: string;
+}
+
+export interface IdocErrorFile {
+  name: string;
+  size: number;
+  modified_at: string;
+  reason: string;
+}
+
+export interface IdocStatus {
+  folder_available: boolean;
+  worker_alive: boolean;
+  worker: {
+    last_round_at?: string;
+    enabled?: boolean;
+    profile?: Profile;
+    interval_seconds?: number;
+    converted_total?: number;
+    failed_total?: number;
+    last_converted_at?: string | null;
+    last_failed_at?: string | null;
+  };
+  counts: Record<"inbox" | "outbox" | "processed" | "error", number>;
+  errors: IdocErrorFile[];
 }

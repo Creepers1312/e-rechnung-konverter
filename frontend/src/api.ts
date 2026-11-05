@@ -1,9 +1,13 @@
 import type {
   AdminSettings,
-  ArchivedDocument,
   AuditEntry,
   CurrentUser,
+  CustomerInfo,
+  DocumentFilter,
+  DocumentPage,
   ExtractionResult,
+  IdocStatus,
+  ImportResult,
   Invoice,
   Profile,
   Role,
@@ -57,7 +61,7 @@ export async function extractPdf(file: File): Promise<ExtractionResult> {
   return res.json();
 }
 
-export async function importIdoc(file: File): Promise<Invoice> {
+export async function importIdoc(file: File): Promise<ImportResult> {
   const res = await check(await apiFetch("/api/erp/sap-ecc/idoc", { method: "POST", body: upload(file) }));
   return res.json();
 }
@@ -84,7 +88,12 @@ export interface ExportSource {
   name: string;
 }
 
-export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: File | null, source: ExportSource): Promise<Blob> {
+export interface ExportResult {
+  blob: Blob;
+  documentId: number;
+}
+
+export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: File | null, source: ExportSource): Promise<ExportResult> {
   if (profile === "xrechnung") {
     const qs = new URLSearchParams({ source: source.kind, source_name: source.name });
     const res = await check(
@@ -94,7 +103,7 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
         body: JSON.stringify(invoice),
       }),
     );
-    return res.blob();
+    return { blob: await res.blob(), documentId: Number(res.headers.get("X-Document-Id")) };
   }
   const form = new FormData();
   form.append("invoice", JSON.stringify(invoice));
@@ -102,11 +111,30 @@ export async function exportInvoice(invoice: Invoice, profile: Profile, pdf: Fil
   form.append("source_name", source.name);
   if (pdf) form.append("file", pdf);
   const res = await check(await apiFetch("/api/export/zugferd", { method: "POST", body: form }));
+  return { blob: await res.blob(), documentId: Number(res.headers.get("X-Document-Id")) };
+}
+
+export async function listDocuments(filter: DocumentFilter = {}): Promise<DocumentPage> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
+  const res = await check(await apiFetch(`/api/documents?${params}`));
+  return res.json();
+}
+
+/** Selected archive entries as one ZIP file. */
+export async function downloadZip(ids: number[]): Promise<Blob> {
+  const res = await check(
+    await apiFetch("/api/documents/zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }),
+  );
   return res.blob();
 }
 
-export async function listDocuments(): Promise<ArchivedDocument[]> {
-  const res = await check(await apiFetch("/api/documents"));
+export async function searchCustomers(q: string, signal?: AbortSignal): Promise<CustomerInfo[]> {
+  const res = await check(await apiFetch(`/api/customers?${new URLSearchParams({ q })}`, { signal }));
   return res.json();
 }
 
@@ -172,4 +200,12 @@ export async function saveSettings(settings: AdminSettings): Promise<AdminSettin
 export async function getAudit(action?: string): Promise<AuditEntry[]> {
   const qs = action ? `?${new URLSearchParams({ action })}` : "";
   return (await check(await apiFetch(`/api/admin/audit${qs}`))).json();
+}
+
+export async function getIdocStatus(): Promise<IdocStatus> {
+  return (await check(await apiFetch("/api/admin/idoc/status"))).json();
+}
+
+export async function retryIdoc(name: string): Promise<void> {
+  await check(await apiFetch("/api/admin/idoc/retry", json("POST", { name })));
 }

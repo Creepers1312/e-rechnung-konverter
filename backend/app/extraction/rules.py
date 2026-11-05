@@ -35,6 +35,7 @@ class ExtractionResult(BaseModel):
     template_id: str
     template_name: str
     warnings: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)  # informational, e.g. "filled from address book"
     raw_text: str = ""
 
 

@@ -1,3 +1,4 @@
+import { BuyerLookup } from "./BuyerLookup";
 import type { Invoice, Issue, LineItem, Party, VatCategory } from "./types";
 
 export type Update = (path: string, value: unknown) => void;
@@ -183,7 +184,10 @@ export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; upd
         </div>
       </section>
       <section>
-        <h2>Käufer</h2>
+        <div className="section-head">
+          <h2>Käufer</h2>
+          <BuyerLookup invoice={invoice} update={update} />
+        </div>
         <PartyFields prefix="buyer" party={invoice.buyer} update={update} issues={issues} />
       </section>
       <section>

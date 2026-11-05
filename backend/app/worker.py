@@ -27,12 +27,14 @@ import os
 import shutil
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import customers
 from .convert import convert
-from .db import archive, get_engine
+from .db import archive, get_engine, get_setting, put_setting
 from .erp.sap_ecc_idoc import SapEccIdocFolderAdapter
 from .export.cii import Profile
 from .settings import get_company, get_idoc_settings
@@ -80,7 +82,9 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
             continue
         try:
             invoice = adapter.get_invoice(name)
+            customers.fill(session, invoice)  # e.g. e-invoice address / Leitweg-ID from earlier exports
             result = convert(invoice, profile)
+            customers.remember(session, invoice, "worker")
             archive(
                 session,
                 invoice,
@@ -105,6 +109,27 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
     return ok, failed
 
 
+STATUS_KEY = "idoc_status"
+
+
+def report_status(session: Session, enabled: bool, profile: str, interval: int, ok: int, failed: int) -> None:
+    """Heartbeat + counters for the admin status page (settings row "idoc_status")."""
+    previous = get_setting(session, STATUS_KEY) or {}
+    now = datetime.now(UTC).isoformat()
+    status = {
+        "last_round_at": now,
+        "enabled": enabled,
+        "profile": profile,
+        "interval_seconds": interval,
+        "converted_total": int(previous.get("converted_total", 0)) + ok,
+        "failed_total": int(previous.get("failed_total", 0)) + failed,
+        "last_converted_at": now if ok else previous.get("last_converted_at"),
+        "last_failed_at": now if failed else previous.get("last_failed_at"),
+    }
+    put_setting(session, STATUS_KEY, status, "worker")
+    session.commit()
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     folders = Folders.under(Path(os.environ.get("IDOC_DIR", "./data/idoc")))
@@ -126,12 +151,19 @@ def main() -> None:
                         interval,
                     )
                     last = (cfg.enabled, cfg.profile)
+                ok = failed = 0
                 if cfg.enabled:
-                    process_once(folders, cfg.profile, session)
+                    ok, failed = process_once(folders, cfg.profile, session)
+                report_status(session, cfg.enabled, cfg.profile, interval, ok, failed)
             heartbeat.touch()  # also while disabled: the worker itself is healthy
         except Exception:  # e.g. database briefly unreachable: retry next round
             log.exception("round failed")
-        time.sleep(interval)
+        # sleep in short steps and keep the heartbeat fresh, so long intervals
+        # (up to an hour) do not make the Docker health check fail
+        deadline = time.monotonic() + interval
+        while (remaining := deadline - time.monotonic()) > 0:
+            time.sleep(min(5.0, remaining))
+            heartbeat.touch()
 
 
 if __name__ == "__main__":

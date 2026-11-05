@@ -32,7 +32,9 @@ comments and identifiers are English.
    both the API and the IDoc worker.
 7. **Deployment is Docker Compose** (`compose.yaml`): frontend (nginx, only
    published port), backend, worker (same image, `python -m app.worker`), db
-   (PostgreSQL). Network `data` is internal: worker and db have no internet.
+   (PostgreSQL), backup (`backup/backup.sh`, pg_dump). Network `data` is
+   internal: worker, db and backup have no internet. The IDoc folder is mounted
+   into worker (processing) and backend (admin status/retry).
    Locally without Docker the backend falls back to SQLite.
 8. **Export only when valid**: export endpoints re-run validation and return 422
    with the issues. CII element order follows the XSD — check `check_xsd` after
@@ -43,6 +45,9 @@ comments and identifiers are English.
    `/api/auth/login` are public. Writes need the `X-Requested-With: erechnung`
    header. Security-relevant actions go to the audit log (`db.audit`).
    Admin-editable configuration lives in the `settings` table (`app/settings.py`).
+10. **Buyer address book** (`app/customers.py`): exports remember the buyer;
+    `customers.fill` only fills *empty* fields. Text search must lower-case both
+    sides – PostgreSQL's LIKE is case-sensitive, SQLite's (used in tests) is not.
 
 ## Commands
 

@@ -7,7 +7,7 @@ import facturx
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.db import Base, list_documents
+from app.db import Base, search_documents
 from app.worker import Folders, process_once
 
 SAMPLE = Path(__file__).parent / "fixtures" / "invoic02_sample.xml"
@@ -27,7 +27,7 @@ def test_worker_converts_inbox_and_archives(tmp_path: Path) -> None:
     with _session(tmp_path) as session:
         ok, failed = process_once(folders, "zugferd", session, now=1e12)
         assert (ok, failed) == (1, 1)
-        docs = list_documents(session)
+        docs, _ = search_documents(session)
         assert [d.source_name for d in docs] == ["rechnung1.xml"]
 
     out = folders.outbox / "0090001234.pdf"

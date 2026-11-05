@@ -4,6 +4,7 @@
 #   backend   FastAPI                                   (internal only)
 #   worker    SAP ECC IDoc inbox -> e-invoices          (no internet access)
 #   db        PostgreSQL archive of all e-invoices      (internal only)
+#   backup    daily pg_dump of the database             (no internet access)
 #
 # Network "web" connects frontend and backend; network "data" (internal, no
 # internet) connects backend, worker and db. The frontend cannot reach the db.
@@ -46,8 +47,10 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-60}
       SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-12}
+      IDOC_DIR: /data/idoc
     volumes:
       - ./backend/config:/app/config:ro  # company.yaml (own master data)
+      - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # admin status page + "retry failed IDoc"
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +78,30 @@ services:
         condition: service_healthy
       backend:
         condition: service_started  # backend builds the shared image
+    networks: [data]
+
+  backup:
+    image: postgres:16-alpine  # same major version as db, so pg_dump matches
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-erechnung}
+      PGUSER: ${POSTGRES_USER:-erechnung}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      BACKUP_TIME: ${BACKUP_TIME:-02:30}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup/backup.sh:/backup.sh:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    healthcheck:  # healthy = a backup younger than 26 hours exists
+      test: ["CMD-SHELL", "find /backups -name 'erechnung-*.dump' -mmin -1560 | grep -q ."]
+      interval: 5m
+      timeout: 10s
+      start_period: 2m
+    depends_on:
+      db:
+        condition: service_healthy
     networks: [data]
 
   frontend:

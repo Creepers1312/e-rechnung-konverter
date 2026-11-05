@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import re
-from datetime import datetime
+import shutil
+import time
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -14,8 +18,9 @@ from sqlalchemy.orm import Session
 from . import auth
 from .auth import Role, current_session, require_admin
 from .company import Company
-from .db import AuditEntry, LoginSession, User, audit, get_session, put_setting
+from .db import AuditEntry, LoginSession, User, audit, get_session, get_setting, put_setting
 from .settings import IdocSettings, get_company, get_idoc_settings
+from .worker import STATUS_KEY
 
 router = APIRouter(prefix="/api")
 
@@ -213,6 +218,7 @@ def read_audit(
         "password_changed",
         "password_reset",
         "settings_changed",
+        "idoc_retry",
     ]
     | None = None,
     _: User = Depends(require_admin),
@@ -222,3 +228,89 @@ def read_audit(
     if action:
         stmt = stmt.where(AuditEntry.action == action)
     return list(session.scalars(stmt))
+
+
+# --- SAP IDoc inbox status (admin) ---------------------------------------------
+
+
+class IdocErrorFile(BaseModel):
+    name: str
+    size: int
+    modified_at: datetime
+    reason: str
+
+
+class IdocStatus(BaseModel):
+    folder_available: bool  # is the IDoc folder mounted into the backend?
+    worker_alive: bool
+    worker: dict  # last report of the worker (see worker.report_status)
+    counts: dict[str, int]  # files per folder: inbox, outbox, processed, error
+    errors: list[IdocErrorFile]
+
+
+class RetryRequest(BaseModel):
+    name: str = Field(max_length=255)
+
+
+def _idoc_base() -> Path:
+    return Path(os.environ.get("IDOC_DIR", "./data/idoc"))
+
+
+def _count(folder: Path) -> int:
+    return (
+        sum(1 for p in folder.iterdir() if p.is_file() and not p.name.endswith(".error.txt")) if folder.is_dir() else 0
+    )
+
+
+@router.get("/admin/idoc/status", response_model=IdocStatus)
+def idoc_status(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> IdocStatus:
+    base = _idoc_base()
+    worker = get_setting(session, STATUS_KEY) or {}
+    alive = False
+    if worker.get("last_round_at"):
+        age = datetime.now(UTC) - datetime.fromisoformat(worker["last_round_at"])
+        alive = age.total_seconds() < 3 * int(worker.get("interval_seconds", 10)) + 30
+    errors: list[IdocErrorFile] = []
+    error_dir = base / "error"
+    if error_dir.is_dir():
+        files = [p for p in error_dir.iterdir() if p.is_file() and not p.name.endswith(".error.txt")]
+        for p in sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)[:100]:
+            reason_file = p.with_name(p.name + ".error.txt")
+            reason = reason_file.read_text(encoding="utf-8", errors="replace").strip() if reason_file.exists() else ""
+            st = p.stat()
+            errors.append(
+                IdocErrorFile(
+                    name=p.name, size=st.st_size, modified_at=datetime.fromtimestamp(st.st_mtime, UTC), reason=reason
+                )
+            )
+    return IdocStatus(
+        folder_available=(base / "inbox").is_dir(),
+        worker_alive=alive,
+        worker=worker,
+        counts={name: _count(base / name) for name in ("inbox", "outbox", "processed", "error")},
+        errors=errors,
+    )
+
+
+@router.post("/admin/idoc/retry", status_code=204)
+def idoc_retry(
+    body: RetryRequest, admin: User = Depends(require_admin), session: Session = Depends(get_session)
+) -> Response:
+    """Move a failed IDoc back into the inbox (e.g. after fixing master data or the mapping)."""
+    base = _idoc_base()
+    if Path(body.name).name != body.name or body.name.endswith(".error.txt"):
+        raise HTTPException(400, "Ungültiger Dateiname.")
+    src = base / "error" / body.name
+    if not src.is_file():
+        raise HTTPException(404, "Datei nicht im Fehlerordner gefunden.")
+    target = base / "inbox" / body.name
+    n = 1
+    while target.exists():
+        target = base / "inbox" / f"{src.stem}.retry{n}{src.suffix}"
+        n += 1
+    shutil.move(str(src), target)
+    os.utime(target, (time.time() - 60, time.time() - 60))  # ready for the worker right away
+    src.with_name(src.name + ".error.txt").unlink(missing_ok=True)
+    audit(session, admin.username, "idoc_retry", file=body.name)
+    session.commit()
+    return Response(status_code=204)

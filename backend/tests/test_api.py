@@ -60,7 +60,7 @@ def test_extract_rejects_non_pdf(client: TestClient) -> None:
 def test_idoc_import_and_zugferd_without_source_pdf(client: TestClient) -> None:
     r = client.post("/api/erp/sap-ecc/idoc", files={"file": ("i.xml", SAMPLE_IDOC.read_bytes(), "application/xml")})
     assert r.status_code == 200, r.text
-    inv = r.json()
+    inv = r.json()["invoice"]
     r = client.post("/api/export/zugferd", data={"invoice": Invoice.model_validate(inv).model_dump_json()})
     assert r.status_code == 200, r.text
     _, xml = facturx.get_xml_from_pdf(r.content)
@@ -75,7 +75,7 @@ def test_exports_are_archived_and_downloadable(client: TestClient, invoice: Invo
     assert r.status_code == 200, r.text
     doc_id = int(r.headers["X-Document-Id"])
 
-    listing = client.get("/api/documents").json()
+    listing = client.get("/api/documents").json()["items"]
     entry = next(d for d in listing if d["id"] == doc_id)
     assert entry["invoice_number"] == "RE-2026-0042"
     assert entry["source_name"] == "kunde.pdf"

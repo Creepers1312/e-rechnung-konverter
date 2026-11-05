@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
-import { ApiError, createUser, getAudit, getSettings, listUsers, saveSettings, updateUser } from "./api";
+import {
+  ApiError,
+  createUser,
+  getAudit,
+  getIdocStatus,
+  getSettings,
+  listUsers,
+  retryIdoc,
+  saveSettings,
+  updateUser,
+} from "./api";
 import { Field, PartyFields, setPath } from "./InvoiceForm";
-import type { AdminSettings, AuditEntry, CurrentUser, Role } from "./types";
+import type { AdminSettings, AuditEntry, CurrentUser, IdocStatus, Role } from "./types";
 
 function message(err: unknown): string {
   if (err instanceof ApiError) return [err.message, ...err.details].join(" – ");
@@ -12,14 +22,19 @@ function fmt(date: string | null): string {
   return date ? new Date(date).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–";
 }
 
-type Tab = "users" | "settings" | "audit";
+type Tab = "users" | "idoc" | "settings" | "audit";
 
 export function Admin({ me }: { me: CurrentUser }) {
   const [tab, setTab] = useState<Tab>("users");
   return (
     <div className="admin">
       <nav className="tabs" role="tablist">
-        {([["users", "Benutzer"], ["settings", "Einstellungen & Konnektoren"], ["audit", "Protokoll"]] as [Tab, string][]).map(
+        {([
+          ["users", "Benutzer"],
+          ["idoc", "SAP-Eingang"],
+          ["settings", "Einstellungen & Konnektoren"],
+          ["audit", "Protokoll"],
+        ] as [Tab, string][]).map(
           ([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
               {label}
@@ -28,6 +43,7 @@ export function Admin({ me }: { me: CurrentUser }) {
         )}
       </nav>
       {tab === "users" && <Users me={me} />}
+      {tab === "idoc" && <IdocPanel />}
       {tab === "settings" && <SettingsPanel />}
       {tab === "audit" && <Audit />}
     </div>
@@ -253,6 +269,7 @@ const ACTIONS: Record<string, string> = {
   password_changed: "Passwort geändert",
   password_reset: "Passwort zurückgesetzt",
   settings_changed: "Einstellungen geändert",
+  idoc_retry: "IDoc erneut eingereiht",
 };
 
 function Audit() {
@@ -304,5 +321,128 @@ function Audit() {
         </table>
       </div>
     </section>
+  );
+}
+
+// --- SAP IDoc inbox status ----------------------------------------------------------
+
+function IdocPanel() {
+  const [status, setStatus] = useState<IdocStatus | null>(null);
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+
+  const reload = () =>
+    getIdocStatus()
+      .then((s) => {
+        setStatus(s);
+        setError("");
+      })
+      .catch((e) => setError(message(e)));
+
+  useEffect(() => {
+    void reload();
+    const t = setInterval(() => void reload(), 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!status) return error ? <div className="alert error">{error}</div> : <p className="hint">Lädt …</p>;
+  const w = status.worker;
+  const state = !w.last_round_at
+    ? { cls: "bad", text: "Worker hat sich noch nie gemeldet" }
+    : !status.worker_alive
+      ? { cls: "bad", text: `Worker antwortet nicht (zuletzt ${fmt(w.last_round_at)})` }
+      : w.enabled === false
+        ? { cls: "warn", text: "Worker läuft, automatische Verarbeitung ist ausgeschaltet" }
+        : { cls: "good", text: `Worker läuft · prüft alle ${w.interval_seconds} s · Format ${w.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD"}` };
+
+  return (
+    <div className="form">
+      <section>
+        <h2>SAP-Eingang (IDoc-Ordner)</h2>
+        <p className={`status-line ${state.cls}`}>● {state.text}</p>
+        {!status.folder_available && (
+          <div className="alert error">
+            Der IDoc-Ordner ist im Backend nicht eingebunden – Zähler und Fehlerliste sind nicht verfügbar
+            (siehe <code>IDOC_HOST_DIR</code> in <code>compose.yaml</code>).
+          </div>
+        )}
+        <div className="stats">
+          <div className="stat">
+            <span>Eingang (wartet)</span>
+            <strong>{status.counts.inbox}</strong>
+          </div>
+          <div className="stat">
+            <span>Erzeugt (Ausgang)</span>
+            <strong>{status.counts.outbox}</strong>
+          </div>
+          <div className="stat">
+            <span>Verarbeitet</span>
+            <strong>{status.counts.processed}</strong>
+          </div>
+          <div className={`stat${status.counts.error ? " bad" : ""}`}>
+            <span>Fehler</span>
+            <strong>{status.counts.error}</strong>
+          </div>
+        </div>
+        <p className="hint">
+          Seit Start des Workers: {w.converted_total ?? 0} umgewandelt, {w.failed_total ?? 0} fehlgeschlagen · letzte
+          Umwandlung {fmt(w.last_converted_at ?? null)} · letzter Fehler {fmt(w.last_failed_at ?? null)} · letzte
+          Runde {fmt(w.last_round_at ?? null)}
+        </p>
+      </section>
+
+      <section>
+        <h2>Fehlgeschlagene IDocs</h2>
+        {status.errors.length === 0 ? (
+          <p className="ok">✓ Keine fehlgeschlagenen IDocs.</p>
+        ) : (
+          <>
+            <p className="hint">
+              Ursache beheben (z. B. Firmendaten oder Adressbuch ergänzen), dann „Erneut verarbeiten“ – die Datei
+              wandert zurück in den Eingang.
+            </p>
+            <div className="lines">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Datei</th>
+                    <th>Zeit</th>
+                    <th>Grund</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {status.errors.map((f) => (
+                    <tr key={f.name}>
+                      <td>{f.name}</td>
+                      <td>{fmt(f.modified_at)}</td>
+                      <td className="detail">{f.reason || "–"}</td>
+                      <td>
+                        <button
+                          className="secondary"
+                          onClick={async () => {
+                            try {
+                              await retryIdoc(f.name);
+                              setInfo(`„${f.name}“ wurde erneut in den Eingang gelegt.`);
+                              await reload();
+                            } catch (e) {
+                              setError(message(e));
+                            }
+                          }}
+                        >
+                          Erneut verarbeiten
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        {error && <div className="alert error">{error}</div>}
+        {info && <div className="alert info">{info}</div>}
+      </section>
+    </div>
   );
 }

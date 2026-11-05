@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from functools import lru_cache
 
@@ -23,7 +23,9 @@ from sqlalchemy import (
     Numeric,
     String,
     create_engine,
+    func,
     inspect,
+    or_,
     select,
     text,
 )
@@ -108,6 +110,20 @@ class AuditEntry(Base):
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class Customer(Base):
+    """Buyer address book, filled automatically from exported invoices."""
+
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    lookup_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # "erp:<id>" or "name:<name>"
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    party: Mapped[dict] = mapped_column(JSON)  # model.Party as JSON
+    buyer_reference: Mapped[str] = mapped_column(String(100), default="")  # last used Leitweg-ID
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+    updated_by: Mapped[str] = mapped_column(String(100), default="")
+
+
 def database_url() -> str:
     return os.environ.get("DATABASE_URL", DEFAULT_URL)
 
@@ -176,8 +192,44 @@ def archive(
     return doc
 
 
-def list_documents(session: Session, limit: int = 100) -> list[Document]:
-    return list(session.scalars(select(Document).order_by(Document.created_at.desc(), Document.id.desc()).limit(limit)))
+def search_documents(
+    session: Session,
+    *,
+    query: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    profile: str | None = None,
+    source: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> tuple[list[Document], int]:
+    """Archive search, newest first. `query` matches invoice number or buyer (case-insensitive)."""
+    conditions = []
+    if query.strip():
+        term = query.strip().lower()
+        conditions.append(
+            or_(
+                func.lower(Document.invoice_number).contains(term, autoescape=True),
+                func.lower(Document.buyer_name).contains(term, autoescape=True),
+            )
+        )
+    if date_from:
+        conditions.append(Document.created_at >= datetime.combine(date_from, time.min, UTC))
+    if date_to:
+        conditions.append(Document.created_at < datetime.combine(date_to + timedelta(days=1), time.min, UTC))
+    if profile:
+        conditions.append(Document.profile == profile)
+    if source:
+        conditions.append(Document.source == source)
+    total = session.scalar(select(func.count()).select_from(Document).where(*conditions)) or 0
+    stmt = (
+        select(Document)
+        .where(*conditions)
+        .order_by(Document.created_at.desc(), Document.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.scalars(stmt)), total
 
 
 def audit(session: Session, actor: str, action: str, /, **detail: object) -> None:
