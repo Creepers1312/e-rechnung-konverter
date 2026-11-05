@@ -3,15 +3,15 @@ import {
   ApiError,
   createUser,
   getAudit,
-  getIdocStatus,
+  getInboxStatus,
   getSettings,
   listUsers,
-  retryIdoc,
+  retryInboxFile,
   saveSettings,
   updateUser,
 } from "./api";
 import { Field, PartyFields, setPath } from "./InvoiceForm";
-import type { AdminSettings, AuditEntry, CurrentUser, IdocStatus, Role } from "./types";
+import type { AdminSettings, AuditEntry, CurrentUser, InboxStatus, Role } from "./types";
 
 function message(err: unknown): string {
   if (err instanceof ApiError) return [err.message, ...err.details].join(" – ");
@@ -31,7 +31,7 @@ export function Admin({ me }: { me: CurrentUser }) {
       <nav className="tabs" role="tablist">
         {([
           ["users", "Benutzer"],
-          ["idoc", "SAP-Eingang"],
+          ["idoc", "Eingänge & Automatik"],
           ["settings", "Einstellungen & Konnektoren"],
           ["audit", "Protokoll"],
         ] as [Tab, string][]).map(
@@ -43,7 +43,7 @@ export function Admin({ me }: { me: CurrentUser }) {
         )}
       </nav>
       {tab === "users" && <Users me={me} />}
-      {tab === "idoc" && <IdocPanel />}
+      {tab === "idoc" && <InboxPanel />}
       {tab === "settings" && <SettingsPanel />}
       {tab === "audit" && <Audit />}
     </div>
@@ -205,8 +205,9 @@ function SettingsPanel() {
       <section>
         <h2>Konnektor: SAP ECC (IDoc-Eingangsordner)</h2>
         <p className="hint">
-          SAP legt INVOIC02-Dateien im Eingangsordner ab; der Worker wandelt sie automatisch um und archiviert sie.
-          Der Ordner selbst wird beim Start festgelegt (<code>IDOC_HOST_DIR</code>).
+          SAP legt INVOIC02-Dateien im Eingangsordner ab; fehlerfreie werden automatisch umgewandelt und archiviert,
+          alle anderen landen unter „Zu prüfen“. Der Ordner wird beim Start festgelegt (<code>IDOC_HOST_DIR</code>).
+          Das Prüfintervall gilt für beide Eingänge.
         </p>
         <div className="grid">
           <label className="field checkbox">
@@ -231,6 +232,42 @@ function SettingsPanel() {
             />
           </label>
         </div>
+      </section>
+
+      <section>
+        <h2>Konnektor: PDF-Eingangsordner (Scanner, Netzlaufwerk)</h2>
+        <p className="hint">
+          PDFs im Eingangsordner (<code>PDF_HOST_DIR</code>) werden gelesen – Scans per Texterkennung –, mit dem
+          Käufer-Adressbuch ergänzt und geprüft.
+        </p>
+        <div className="grid">
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={settings.pdf_inbox.enabled}
+              onChange={(e) => update("pdf_inbox.enabled", e.target.checked)}
+            />
+            <span>PDF-Eingang aktiv</span>
+          </label>
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={settings.pdf_inbox.auto_export}
+              onChange={(e) => update("pdf_inbox.auto_export", e.target.checked)}
+            />
+            <span>Vollautomatisch: fehlerfreie Rechnungen ohne Freigabe erzeugen</span>
+          </label>
+          <label className="field">
+            <span>Ausgabeformat</span>
+            <select value={settings.pdf_inbox.profile} onChange={(e) => update("pdf_inbox.profile", e.target.value)}>
+              <option value="zugferd">ZUGFeRD (PDF)</option>
+              <option value="xrechnung">XRechnung (XML)</option>
+            </select>
+          </label>
+        </div>
+        <p className="hint">
+          Ohne „Vollautomatisch“ landet jede Rechnung unter „Zu prüfen“ und wird erst nach Kontrolle erzeugt (Vier-Augen-Prinzip).
+        </p>
       </section>
 
       <section>
@@ -269,7 +306,8 @@ const ACTIONS: Record<string, string> = {
   password_changed: "Passwort geändert",
   password_reset: "Passwort zurückgesetzt",
   settings_changed: "Einstellungen geändert",
-  idoc_retry: "IDoc erneut eingereiht",
+  idoc_retry: "Datei erneut eingereiht",
+  review_discarded: "Prüfeintrag verworfen",
 };
 
 function Audit() {
@@ -324,15 +362,15 @@ function Audit() {
   );
 }
 
-// --- SAP IDoc inbox status ----------------------------------------------------------
+// --- inboxes (SAP IDocs + PDFs) ------------------------------------------------------
 
-function IdocPanel() {
-  const [status, setStatus] = useState<IdocStatus | null>(null);
+function InboxPanel() {
+  const [status, setStatus] = useState<InboxStatus | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
   const reload = () =>
-    getIdocStatus()
+    getInboxStatus()
       .then((s) => {
         setStatus(s);
         setError("");
@@ -348,59 +386,53 @@ function IdocPanel() {
   if (!status) return error ? <div className="alert error">{error}</div> : <p className="hint">Lädt …</p>;
   const w = status.worker;
   const state = !w.last_round_at
-    ? { cls: "bad", text: "Worker hat sich noch nie gemeldet" }
+    ? { cls: "bad", text: "Der Worker hat sich noch nie gemeldet" }
     : !status.worker_alive
-      ? { cls: "bad", text: `Worker antwortet nicht (zuletzt ${fmt(w.last_round_at)})` }
-      : w.enabled === false
-        ? { cls: "warn", text: "Worker läuft, automatische Verarbeitung ist ausgeschaltet" }
-        : { cls: "good", text: `Worker läuft · prüft alle ${w.interval_seconds} s · Format ${w.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD"}` };
+      ? { cls: "bad", text: `Der Worker antwortet nicht (zuletzt ${fmt(w.last_round_at)})` }
+      : { cls: "good", text: `Worker läuft · prüft alle ${w.interval_seconds} s` };
 
   return (
     <div className="form">
       <section>
-        <h2>SAP-Eingang (IDoc-Ordner)</h2>
+        <h2>Automatik</h2>
         <p className={`status-line ${state.cls}`}>● {state.text}</p>
-        {!status.folder_available && (
-          <div className="alert error">
-            Der IDoc-Ordner ist im Backend nicht eingebunden – Zähler und Fehlerliste sind nicht verfügbar
-            (siehe <code>IDOC_HOST_DIR</code> in <code>compose.yaml</code>).
-          </div>
-        )}
-        <div className="stats">
-          <div className="stat">
-            <span>Eingang (wartet)</span>
-            <strong>{status.counts.inbox}</strong>
-          </div>
-          <div className="stat">
-            <span>Erzeugt (Ausgang)</span>
-            <strong>{status.counts.outbox}</strong>
-          </div>
-          <div className="stat">
-            <span>Verarbeitet</span>
-            <strong>{status.counts.processed}</strong>
-          </div>
-          <div className={`stat${status.counts.error ? " bad" : ""}`}>
-            <span>Fehler</span>
-            <strong>{status.counts.error}</strong>
-          </div>
-        </div>
         <p className="hint">
-          Seit Start des Workers: {w.converted_total ?? 0} umgewandelt, {w.failed_total ?? 0} fehlgeschlagen · letzte
-          Umwandlung {fmt(w.last_converted_at ?? null)} · letzter Fehler {fmt(w.last_failed_at ?? null)} · letzte
-          Runde {fmt(w.last_round_at ?? null)}
+          Seit Start: {w.converted_total ?? 0} automatisch erzeugt · {w.review_total ?? 0} zur Prüfung · {w.failed_total ?? 0}{" "}
+          unlesbar · letzte Umwandlung {fmt(w.last_converted_at ?? null)} · letzte Runde {fmt(w.last_round_at ?? null)}
         </p>
       </section>
 
-      <section>
-        <h2>Fehlgeschlagene IDocs</h2>
-        {status.errors.length === 0 ? (
-          <p className="ok">✓ Keine fehlgeschlagenen IDocs.</p>
-        ) : (
-          <>
-            <p className="hint">
-              Ursache beheben (z. B. Firmendaten oder Adressbuch ergänzen), dann „Erneut verarbeiten“ – die Datei
-              wandert zurück in den Eingang.
-            </p>
+      {status.inboxes.map((box) => (
+        <section key={box.kind}>
+          <h2>
+            {box.label}
+            {box.kind === "idoc" && w.enabled === false && <span className="badge">ausgeschaltet</span>}
+            {box.kind === "pdf" && w.pdf_enabled === false && <span className="badge">ausgeschaltet</span>}
+          </h2>
+          {!box.folder_available && (
+            <div className="alert error">
+              Der Ordner ist im Backend nicht eingebunden – Zähler und Fehlerliste sind nicht verfügbar.
+            </div>
+          )}
+          <div className="stats">
+            <div className="stat">
+              <span>Eingang (wartet)</span>
+              <strong>{box.counts.inbox}</strong>
+            </div>
+            <div className="stat">
+              <span>Erzeugt (Ausgang)</span>
+              <strong>{box.counts.outbox}</strong>
+            </div>
+            <div className="stat">
+              <span>Verarbeitet</span>
+              <strong>{box.counts.processed}</strong>
+            </div>
+            <div className={`stat${box.counts.error ? " bad" : ""}`}>
+              <span>Unlesbar</span>
+              <strong>{box.counts.error}</strong>
+            </div>
+          </div>
+          {box.errors.length > 0 && (
             <div className="lines">
               <table>
                 <thead>
@@ -412,7 +444,7 @@ function IdocPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {status.errors.map((f) => (
+                  {box.errors.map((f) => (
                     <tr key={f.name}>
                       <td>{f.name}</td>
                       <td>{fmt(f.modified_at)}</td>
@@ -422,7 +454,7 @@ function IdocPanel() {
                           className="secondary"
                           onClick={async () => {
                             try {
-                              await retryIdoc(f.name);
+                              await retryInboxFile(box.kind, f.name);
                               setInfo(`„${f.name}“ wurde erneut in den Eingang gelegt.`);
                               await reload();
                             } catch (e) {
@@ -438,11 +470,11 @@ function IdocPanel() {
                 </tbody>
               </table>
             </div>
-          </>
-        )}
-        {error && <div className="alert error">{error}</div>}
-        {info && <div className="alert info">{info}</div>}
-      </section>
+          )}
+        </section>
+      ))}
+      {error && <div className="alert error">{error}</div>}
+      {info && <div className="alert info">{info}</div>}
     </div>
   );
 }

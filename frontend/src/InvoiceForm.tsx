@@ -34,6 +34,7 @@ export function Field({ label, path, value, update, issues, type = "text", wide,
     <label className={`field${wide ? " wide" : ""}${error ? " invalid" : ""}`} title={error?.message}>
       <span>{label}</span>
       <input
+        data-path={path}
         type={type}
         value={value ?? ""}
         placeholder={placeholder}
@@ -96,13 +97,14 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
   const add = () =>
     update("lines", [
       ...lines,
-      { id: String(lines.length + 1), name: "", quantity: "1", unit_code: "H87", unit_price: "0", vat_category: "S", vat_rate: "19" },
+      { id: String(lines.length + 1), name: "", seller_item_id: "", quantity: "1", unit_code: "H87", unit_price: "0", vat_category: "S", vat_rate: "19" },
     ]);
   const remove = (i: number) => update("lines", lines.filter((_, j) => j !== i));
   const cell = (i: number, key: keyof LineItem, extra: { className?: string } = {}) => {
     const path = `lines.${i}.${key}`;
     return (
       <input
+        data-path={path}
         className={`${extra.className ?? ""}${hasError(issues, path) ? " invalid" : ""}`}
         value={lines[i][key]}
         onChange={(e) => update(path, e.target.value)}
@@ -115,6 +117,7 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
         <thead>
           <tr>
             <th>Pos</th>
+            <th>Artikel-Nr.</th>
             <th>Bezeichnung</th>
             <th>Menge</th>
             <th>Einheit</th>
@@ -128,6 +131,7 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
           {lines.map((l, i) => (
             <tr key={i}>
               <td>{cell(i, "id", { className: "xs" })}</td>
+              <td>{cell(i, "seller_item_id", { className: "sm" })}</td>
               <td>{cell(i, "name")}</td>
               <td>{cell(i, "quantity", { className: "num" })}</td>
               <td>
