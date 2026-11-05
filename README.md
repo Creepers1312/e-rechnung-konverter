@@ -30,7 +30,56 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
 > werden. Die App ist dafür gedacht, die *eigenen* Rechnungen umzuwandeln.
 > Fragen zur Pflicht und zur Archivierung (GoBD) bitte mit der Steuerberatung klären.
 
-## Betrieb mit Docker Compose (empfohlen)
+## Installation auf einem Server (`deploy.sh`)
+
+Auf einem frischen Linux-Server (getestet mit Debian/Ubuntu) genügt:
+
+```bash
+git clone https://github.com/Creepers1312/e-rechnung-konverter.git /opt/erechnung
+cd /opt/erechnung
+./deploy.sh
+```
+
+Das Skript
+
+1. prüft Docker / Docker Compose und **installiert Docker bei Bedarf** (nach Rückfrage, über get.docker.com),
+2. fragt die **Betriebsart** ab (siehe unten), den Projektnamen und den ersten Admin,
+3. legt `.env` mit **zufälligen Passwörtern** an (Datei nur für den Besitzer lesbar),
+4. legt die Ordner für SAP-IDocs und Sicherungen mit den richtigen Rechten an,
+5. baut und startet alles, wartet bis alle Dienste gesund sind und prüft, ob die App antwortet,
+6. zeigt Adresse und **Startpasswort des Admins** (einmalig, wird danach aus `.env` entfernt).
+
+**Update:** einfach erneut `./deploy.sh` im selben Ordner – sichert zuerst die Datenbank,
+holt den neuen Code (`git pull`), baut und startet neu. Einstellungen bleiben erhalten.
+
+**Ohne Rückfragen** (z. B. für Automatisierung):
+
+```bash
+ERECHNUNG_MODE=https DOMAIN=rechnung.firma.de ACME_EMAIL=it@firma.de ./deploy.sh --yes
+```
+
+### Betriebsarten – auch neben anderen Docker-Containern
+
+| Betriebsart | Wann | Was passiert |
+|---|---|---|
+| **1 – Eigener Port** | Test, internes Netz, oder es läuft schon ein Proxy *direkt auf dem Host* | Port frei wählbar (belegte Ports werden erkannt); optional nur `127.0.0.1` |
+| **2 – HTTPS mit Caddy** | eigener Server, Ports 80/443 frei, Domain zeigt auf den Server | Caddy-Container holt und erneuert das Let's-Encrypt-Zertifikat |
+| **3 – Hinter vorhandenem Docker-Proxy** | auf dem Server läuft schon Traefik, Nginx Proxy Manager, nginx-proxy … | App tritt dem Proxy-Netzwerk bei, veröffentlicht **keinen** Port; Ziel für den Proxy: `http://<projektname>-web:80` |
+
+Damit nichts mit anderen Containern kollidiert, hat jede Installation einen eigenen
+**Projektnamen** (`COMPOSE_PROJECT_NAME`) und damit eigene Container-, Netzwerk-, Volume-
+und Image-Namen; das Skript verweigert einen bereits vergebenen Namen. Mehrere
+Installationen (z. B. Test und Produktion) können so auf einem Server laufen.
+
+Für Betriebsart 3:
+- **Nginx Proxy Manager:** neuen Proxy Host anlegen, Ziel `<projektname>-web`, Port `80`, SSL im NPM aktivieren.
+- **Traefik:** im Skript „Traefik“ bejahen – Router-Labels (Domain, Entrypoint, Certresolver) werden gesetzt.
+- **nginx-proxy / acme-companion:** `VIRTUAL_HOST`/`LETSENCRYPT_HOST` werden aus der Domain gesetzt.
+
+Die gewählte Betriebsart steht in `.env` (`COMPOSE_FILE`), daher funktionieren danach
+alle normalen Befehle wie `docker compose ps` oder `docker compose logs -f` unverändert.
+
+## Betrieb mit Docker Compose (manuell)
 
 Jeder Teil läuft in einem eigenen Container:
 
@@ -213,6 +262,8 @@ backend/
   app/main.py               FastAPI-Endpunkte (Umwandeln, Archiv)
 frontend/                   React + Vite + TypeScript (Upload, Prüfformular, Export, Archiv)
 compose.yaml                frontend, backend, worker, db, backup
+deploy.sh                   Installation & Update (Docker-Check, .env, Ordner, Start, Prüfung)
+deploy/                     Overlays: compose.https.yaml (Caddy), compose.proxy.yaml (vorhandener Proxy)
 backup/backup.sh            Sicherungsskript des backup-Dienstes
 samples/                    Beispiel-PDF und Beispiel-IDoc
 scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu

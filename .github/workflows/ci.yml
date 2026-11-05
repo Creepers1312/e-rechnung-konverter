@@ -60,7 +60,14 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Compose-Konfiguration prüfen
-        run: cp .env.example .env && docker compose config -q
+      - name: Compose-Konfiguration prüfen (alle Betriebsarten)
+        run: |
+          cp .env.example .env
+          printf 'DOMAIN=rechnung.example.de\nACME_EMAIL=it@example.de\nPROXY_NETWORK=proxy\n' >> .env
+          for f in compose.yaml compose.yaml:deploy/compose.https.yaml compose.yaml:deploy/compose.proxy.yaml; do
+            COMPOSE_FILE=$f docker compose config -q && echo "ok: $f"
+          done
+      - name: Shell-Skripte prüfen (shellcheck)
+        run: shellcheck -S warning deploy.sh backup/backup.sh
       - name: Images bauen
         run: docker compose build

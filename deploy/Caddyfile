@@ -1,0 +1,16 @@
+# Used by deploy/compose.https.yaml. Caddy obtains and renews the certificate itself.
+# DOMAIN and ACME_EMAIL come from .env (both required).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		X-Frame-Options "DENY"
+	}
+	reverse_proxy frontend:80
+}

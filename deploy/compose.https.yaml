@@ -1,0 +1,40 @@
+# Overlay: bundled Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+# Needs a DNS name (DOMAIN) pointing to this server and free ports 80 + 443.
+#   COMPOSE_FILE=compose.yaml:deploy/compose.https.yaml   (in .env)
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL fehlt in .env (Let's Encrypt)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:  # Caddy's admin API answers only when the config was loaded
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      frontend:
+        condition: service_started
+    networks: [web]
+
+  frontend:
+    ports: !reset []  # only reachable through Caddy
+
+  backend:
+    environment:
+      COOKIE_SECURE: "true"
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
