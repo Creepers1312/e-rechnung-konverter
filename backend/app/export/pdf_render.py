@@ -92,7 +92,10 @@ def render_invoice_pdf(invoice: Invoice) -> bytes:
         c.drawString(20 * mm, y, line.id)
         c.drawString(30 * mm, y, line.name[:55])
         c.drawRightString(135 * mm, y, f"{_qty(line.quantity)} {UNIT_LABELS.get(line.unit_code, '')}".strip())
-        c.drawRightString(160 * mm, y, _eur(line.unit_price))
+        price = _eur(line.unit_price)
+        if line.price_base_quantity != 1:  # "425,22 € / 100 kg"
+            price += f" / {_qty(line.price_base_quantity)} {UNIT_LABELS.get(line.unit_code, '')}".rstrip()
+        c.drawRightString(160 * mm, y, price)
         c.drawRightString(172 * mm, y, f"{_qty(line.vat_rate if line.vat_category == 'S' else Decimal(0))} %")
         c.drawRightString(190 * mm, y, _eur(line.net_amount))
         y -= 5 * mm

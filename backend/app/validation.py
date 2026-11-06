@@ -81,6 +81,12 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
             err("BR-25", f"lines.{i}.name", f"Position {i + 1}: Bezeichnung fehlt.")
         if line.quantity == 0:
             warn("QTY", f"lines.{i}.quantity", f"Position {i + 1}: Menge ist 0.")
+        if line.price_base_quantity <= 0:
+            err(
+                "BT-149",
+                f"lines.{i}.price_base_quantity",
+                f"Position {i + 1}: „je“ (Preisbasis) muss größer als 0 sein.",
+            )
 
     if any(line.vat_category == "S" for line in invoice.lines) and not (s.vat_id or s.tax_number):
         err("BR-S-02", "seller.vat_id", "USt-IdNr. oder Steuernummer des Verkäufers fehlt.")

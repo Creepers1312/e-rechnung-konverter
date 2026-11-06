@@ -120,7 +120,7 @@ Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der
 
 | Funktion | Beschreibung | Technik |
 |---|---|---|
-| Erkennung | Felder aus PDF-Text per Regeln; neue Layouts = neue YAML-Datei, kein Code | `app/extraction/`, Vorlagen in `templates/` |
+| Erkennung | Felder aus PDF-Text per Regeln; neue Layouts = neue YAML-Datei, kein Code. Vorlagen für die Layouts von Rheinfelden Carbon, Alloys (Preis / 1000 KG) und Semis (englisch, Preis / 100 KG, steuerfreie Ausfuhr). OCR-Lesefehler bei Dezimalzeichen („2.640.00“) werden über die aufgedruckten Summen aufgelöst | `app/extraction/`, Vorlagen in `templates/` |
 | Prüfung | EN-16931-Pflichtfelder, Summen, XRechnung-Regeln (z. B. BR-DE-15 Leitweg-ID), XSD | `app/validation.py`, `export/zugferd.py` |
 | Export | CII-XML; für ZUGFeRD in PDF/A-3 eingebettet | `app/export/`, `app/convert.py` |
 | Archiv | jede erzeugte Rechnung samt Datei in der Datenbank; Suche, ZIP-Download | Tabelle `documents` |

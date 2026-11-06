@@ -98,7 +98,7 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
   const add = () =>
     update("lines", [
       ...lines,
-      { id: String(lines.length + 1), name: "", seller_item_id: "", quantity: "1", unit_code: "H87", unit_price: "0", vat_category: "S", vat_rate: "19" },
+      { id: String(lines.length + 1), name: "", seller_item_id: "", quantity: "1", unit_code: "H87", unit_price: "0", price_base_quantity: "1", vat_category: "S", vat_rate: "19" },
     ]);
   const remove = (i: number) => update("lines", lines.filter((_, j) => j !== i));
   const cell = (i: number, key: keyof LineItem, extra: { className?: string } = {}) => {
@@ -122,7 +122,8 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
             <th>Bezeichnung</th>
             <th>Menge</th>
             <th>Einheit</th>
-            <th>Einzelpreis netto</th>
+            <th>Preis netto</th>
+            <th title="Der Preis gilt für so viele Einheiten, z. B. 100 bei „Preis / 100 kg“">je</th>
             <th>Steuer</th>
             <th>%</th>
             <th />
@@ -144,6 +145,7 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
                 </select>
               </td>
               <td>{cell(i, "unit_price", { className: "num" })}</td>
+              <td>{cell(i, "price_base_quantity", { className: "xs num" })}</td>
               <td>
                 <select value={l.vat_category} onChange={(e) => update(`lines.${i}.vat_category`, e.target.value)}>
                   {CATEGORIES.map(([code, label]) => (

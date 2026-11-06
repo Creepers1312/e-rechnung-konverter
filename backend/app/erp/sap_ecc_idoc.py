@@ -26,7 +26,7 @@ from pathlib import Path
 from lxml import etree
 
 from ..company import Company
-from ..model import Address, Contact, Invoice, LineItem, Party
+from ..model import Address, Contact, Invoice, LineItem, Party, round2
 
 MAPPING = {
     "seller_parvw": "RS",
@@ -73,6 +73,18 @@ def _dec(value: str, default: str = "0") -> Decimal:
     if v.endswith("-"):
         v = "-" + v[:-1]
     return Decimal(v)
+
+
+def _price(net: Decimal, qty: Decimal, peinh: Decimal) -> dict[str, Decimal]:
+    """Unit price (+ price base PEINH, e.g. per 100 KG) from SAP's net *value*, with enough
+    decimals that round2(quantity × price / base) reproduces SAP's figure."""
+    if not qty:
+        return {"unit_price": net}
+    if peinh > 1:
+        price = (net * peinh / qty).quantize(Decimal("0.000001")).normalize()
+        if round2(qty * price / peinh) == round2(net):
+            return {"unit_price": price, "price_base_quantity": peinh}
+    return {"unit_price": (net / qty).quantize(Decimal("0.000001")).normalize()}
 
 
 def _party(seg: etree._Element | None) -> Party:
@@ -155,9 +167,7 @@ def parse_invoic02(xml: bytes, company: Company) -> Invoice:
                 name=_t(text_seg, "KTEXT") or _t(text_seg, "IDTNR") or "Position",
                 quantity=qty,
                 unit_code=MAPPING["units"].get(_t(p01, "MENEE").upper(), "H87"),
-                # SAP gives the net *value*; derive the unit price with enough
-                # decimals that round2(quantity × price) reproduces SAP's figure.
-                unit_price=(net / qty).quantize(Decimal("0.000001")).normalize() if qty else net,
+                **_price(net, qty, _dec(_t(p01, "PEINH"), "1")),
                 vat_category="S" if rate > 0 else "Z",
                 vat_rate=rate,
             )
