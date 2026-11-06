@@ -34,6 +34,7 @@ export interface LineItem {
   quantity: string;
   unit_code: string;
   unit_price: string;
+  price_base_quantity: string; // price refers to this many units, e.g. "100" for "€ / 100 kg"
   vat_category: VatCategory;
   vat_rate: string;
 }

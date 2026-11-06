@@ -1,0 +1,29 @@
+# SAP SD invoice layout of Aluminium Rheinfelden Alloys GmbH (German, often scanned).
+# Like rheinfelden-carbon.yaml, but one weight column and the price per 1000 KG:
+#
+#   Materialnummer 1-00051356
+#   Beschreibung   ANTICORODAL-70 EN AC-ALSI7MGO,3
+#   Bruttogesamtgewicht   Preis / 1000 KG   Nettosumme 4.604,16 EUR
+#   1.744,000 KG          2.640,00 EUR      19,00 % MwSt. Total 874,79 EUR
+#
+# OCR often reads the decimal commas as dots ("1.744.000 KG 2.640.00 EUR"); the
+# engine resolves that with the printed net total.
+
+id: rheinfelden-alloys
+name: Aluminium Rheinfelden Alloys (SAP-Rechnung)
+
+match:
+  any:
+    - 'Rheinfelden Alloys'
+    - 'rheinfelden-alloys'
+
+fields:
+  # "Ihre Bestellung / Datum: mail N. Lai / 29.09.2026"
+  order_reference: 'Ihre[ \t]+Bestellung(?:[ \t]*/[ \t]*Datum)?{SEP}([^\n]+?)[ \t]*/[ \t]*{DATE}|Ihre[ \t]+Bestellung{SEP}([A-Z0-9][A-Z0-9\-/_.]*)'
+  # "Zahlungsbedingungen im Rahmen der Warenkreditversicherung:" + next line
+  terms: 'Zahlungsbedingungen[^\n]*:[ \t]*\n[ \t]*([^\n]+)|Zahlungsbedingungen{SEP}([^\n]+)'
+
+lines:
+  start: '^\s*Materialnummer'
+  end: '^\s*(?:Bemerkung|Zu\s+zahlender)'
+  block_pattern: '^[ \t]*Materialnummer[ \t]+(?P<article>\S+)[^\n]*\n[ \t]*Beschreibung[ \t]+(?P<name>[^\n]+?)[ \t]*\n(?:[^\n]*\n){0,2}?[ \t]*(?P<quantity>{NUMBER})[ \t]*(?P<unit>TO|T|KG|ST)\b[ \t]+(?P<unit_price>{AMOUNT})'

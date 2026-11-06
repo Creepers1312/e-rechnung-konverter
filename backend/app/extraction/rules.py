@@ -24,7 +24,10 @@ from .pdf_text import PdfText
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
-AMOUNT = r"-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2}"
+# last alternative: OCR read the decimal comma as a dot ("2.640.00"); only with a thousands
+# group, so dates like "03.11.2026" never look like an amount
+AMOUNT = r"-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2}|-?\d{1,3}(?:\.\d{3})+\.\d{2}(?![\d.])"
+OCR_DOT_AMOUNT = re.compile(r"-?\d{1,3}(?:\.\d{3})+\.\d{2}")
 DATE = r"\d{1,2}\.\d{1,2}\.\d{2,4}"
 NUMBER = r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?"  # quantities: 1.000 / 23,820 / 23.820 (OCR)
 SEP = r"[ \t]*:?[ \t]*"  # between label and value, never across a line break
@@ -137,6 +140,9 @@ def parse_date(value: str | None) -> date | None:
 def _dec(value: str | None) -> Decimal | None:
     if value is None:
         return None
+    if OCR_DOT_AMOUNT.fullmatch(value.strip()):  # "2.640.00" -> "2.640,00"
+        v = value.strip()
+        value = f"{v[:-3]},{v[-2:]}"
     try:
         return Decimal(str(parse_decimal(value)))
     except InvalidOperation:
@@ -160,18 +166,26 @@ def _quantity_candidates(value: str | None) -> list[Decimal]:
     if value is None:
         return []
     v = value.strip()
-    if "," not in v and re.fullmatch(r"\d{1,3}\.\d{3}", v):
-        return [d for d in (_dec(v.replace(".", ",")), _dec(v.replace(".", ""))) if d is not None]
+    if "," not in v and re.fullmatch(r"\d{1,3}(?:\.\d{3})+", v):
+        # "23.820" / "1.744.000": last dot = misread decimal comma, or all dots = thousands
+        head, _, tail = v.rpartition(".")
+        return [d for d in (_dec(f"{head.replace('.', '')},{tail}"), _dec(v.replace(".", ""))) if d is not None]
     d = _dec(v)
     return [d] if d is not None else []
 
 
-def _pick_quantity(candidates: list[Decimal], price: Decimal, target: Decimal | None) -> Decimal:
+def _pick_quantity(candidates: list[Decimal], price: Decimal, base: Decimal, target: Decimal | None) -> Decimal:
     if target is not None:
         for c in candidates:
-            if abs(round2(c * price) - target) <= Decimal("0.01"):
+            if abs(round2(c * price / base) - target) <= Decimal("0.01"):
                 return c
     return candidates[0]
+
+
+def _price_base(cfg: dict[str, Any], text: str) -> Decimal:
+    """Price unit from a table header like "Preis / 1000 KG" or "Price / 100 KG" (default 1)."""
+    base = _dec(_find(cfg, "price_base", text))
+    return base if base and base > 0 else Decimal("1")
 
 
 def _line_region(lcfg: dict[str, Any], text: str, *, include_start: bool) -> str:
@@ -206,6 +220,7 @@ def extract_lines(
 
     lines: list[LineItem] = []
     warnings: list[str] = []
+    header_base = _price_base(cfg, text)
     for m in matches:
         g = m.groupdict()
         candidates, price, total = (
@@ -215,9 +230,10 @@ def extract_lines(
         )
         if not candidates or price is None or not (g.get("name") or "").strip():
             continue
+        base = _dec(g.get("price_base")) or header_base
         # without a line total, a single-item invoice can be checked against the printed net total
         qty = _pick_quantity(
-            candidates, price, total if total is not None else (net_total if len(matches) == 1 else None)
+            candidates, price, base, total if total is not None else (net_total if len(matches) == 1 else None)
         )
         rate = _dec(g.get("vat_rate")) or default_rate
         item = LineItem(
@@ -227,13 +243,13 @@ def extract_lines(
             quantity=qty,
             unit_code=_unit_code(cfg, g.get("unit")),
             unit_price=price,
+            price_base_quantity=base,
             vat_category=(cfg.get("defaults") or {}).get("vat_category", "S"),
             vat_rate=rate,
         )
-        if total is not None and abs(round2(qty * price) - total) > Decimal("0.01"):
+        if total is not None and abs(item.net_amount - total) > Decimal("0.01"):
             warnings.append(
-                f"Position '{item.name}': Menge × Preis = {round2(qty * price)} ≠ {total} im PDF "
-                "(Rabatt oder Lesefehler?)."
+                f"Position '{item.name}': Menge × Preis = {item.net_amount} ≠ {total} im PDF (Rabatt oder Lesefehler?)."
             )
         lines.append(item)
     if not lines:
@@ -344,6 +360,18 @@ def extract(pdf: PdfText, company: Company, templates_dir: Path = TEMPLATE_DIR) 
 
     lines, line_warnings = extract_lines(cfg, text, default_rate, stated.net)
     warnings += line_warnings
+    notes: list[str] = []
+    # tax-free deliveries ("tax free export", "innergemeinschaftliche Lieferung") with no tax printed
+    if lines and not stated.tax:
+        for hint, category, label in (
+            ("export_hint", "G", "Ausfuhr"),
+            ("intra_eu_hint", "K", "innergemeinschaftliche Lieferung"),
+        ):
+            if _find(cfg, hint, text):
+                for line in lines:
+                    line.vat_category, line.vat_rate = category, Decimal("0")  # type: ignore[assignment]
+                notes.append(f"Steuerfreie {label} erkannt – Positionen ohne Umsatzsteuer (Kategorie {category}).")
+                break
 
     buyer = extract_buyer(cfg, pdf, company.seller.name)
     buyer.vat_id = (_find(cfg, "buyer_vat_id", text) or "").replace(" ", "")
@@ -367,7 +395,6 @@ def extract(pdf: PdfText, company: Company, templates_dir: Path = TEMPLATE_DIR) 
         lines=lines,
         payment=payment,
     )
-    notes: list[str] = []
     if invoice.payment.due_date is None and invoice.issue_date:
         days = [int(d) for d in _find_all(cfg, "due_days", text) if d.isdigit()]
         if days:

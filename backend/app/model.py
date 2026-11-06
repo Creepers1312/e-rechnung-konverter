@@ -72,13 +72,16 @@ class LineItem(BaseModel):
     seller_item_id: str = ""  # BT-155, e.g. SAP material number
     quantity: Amount = Decimal("1")  # BT-129
     unit_code: str = "H87"  # UN/ECE Rec 20 (H87 piece, HUR hour, C62 one, ...)
-    unit_price: Amount = Decimal("0")  # net price per unit (BT-146)
+    unit_price: Amount = Decimal("0")  # net price (BT-146) for `price_base_quantity` units
+    # BT-149: the price refers to this many units, e.g. "Preis / 100 KG" -> 100 (common in SAP: PEINH)
+    price_base_quantity: Amount = Decimal("1")
     vat_category: VatCategory = "S"  # BT-151
     vat_rate: Amount = Decimal("19")  # BT-152, percent
 
     @property
     def net_amount(self) -> Decimal:  # BT-131
-        return round2(self.quantity * self.unit_price)
+        base = self.price_base_quantity if self.price_base_quantity > 0 else Decimal("1")
+        return round2(self.quantity * self.unit_price / base)
 
 
 class PaymentInfo(BaseModel):

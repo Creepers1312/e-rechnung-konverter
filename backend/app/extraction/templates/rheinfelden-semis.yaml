@@ -1,0 +1,39 @@
+# SAP SD invoice layout of Aluminium Rheinfelden Semis GmbH (English, often scanned).
+#
+#   Invoice-No. / Date: 5000007599 / 14.09.2026
+#   Customer-No.: 420515 · Your PO No.: 15529/26 · Delivery-Note / Date: ... / 14.09.2026
+#   Payment terms: 60 days after date of B/L
+#
+#   Pos. | Material number / Description | Quantity | Pc/Unit | Price / 100 KG | Price wo. VAT
+#   10 2-00017186
+#   ROUND SLUGS, WITHOUT HOLE, FLAT
+#   1.071,00 KG 425,22 4.554,11
+#
+#   Net Total 87.331,68 EUR · VAT Total 0,00 EUR · Total amount to be paid 87.331,68 EUR
+#   "tax free export" -> no VAT, category G (see export_hint in _generic.yaml)
+
+id: rheinfelden-semis
+name: Aluminium Rheinfelden Semis (SAP-Invoice, englisch)
+
+match:
+  any:
+    - 'Rheinfelden Semis'
+
+fields:
+  number: 'Invoice-?No\.?[ \t]*/[ \t]*Date{SEP}([0-9A-Z][0-9A-Z\-/]*)'
+  issue_date: 'Invoice-?No\.?[ \t]*/[ \t]*Date{SEP}\S+[ \t]*/[ \t]*({DATE})'
+  delivery_date: 'Delivery-?Note[ \t]*/[ \t]*Date{SEP}\S+[ \t]*/[ \t]*({DATE})'
+  order_reference: 'Your[ \t]+PO[ \t]+No\.?{SEP}(\S+)'
+  buyer_erp_id: 'Customer-?No\.?{SEP}([A-Z0-9][A-Z0-9\-]*)'
+  buyer_vat_id: 'Your[ \t]+VAT[ \t]*(?:ID|No\.?|Reg\.?[ \t]*No\.?){SEP}([A-Z]{2}[ \t]?[0-9A-Z]{8,12})'
+  terms: 'Payment[ \t]+terms{SEP}([^\n]+)'
+  # "60 days after date of B/L": the bill-of-lading date is not on the invoice -> no due date
+  due_days: '(?!)'
+  total_net: 'Net[ \t]+Total{SEP}({AMOUNT})'
+  total_tax: 'VAT[ \t]+Total{SEP}({AMOUNT})'
+  total_gross: 'Total[ \t]+amount[ \t]+to[ \t]+be[ \t]+paid{SEP}({AMOUNT})'
+
+lines:
+  start: '^\s*Pos\.'
+  end: '^\s*Total\s+amount'
+  block_pattern: '^[ \t]*(?P<id>\d{1,4})[ \t]+(?P<article>\d-\d{5,})[ \t]*\n[ \t]*(?P<name>[^\n]+?)[ \t]*\n[ \t]*(?P<quantity>{NUMBER})[ \t]*(?P<unit>KG|TO|T|ST|PC)\b[ \t]+(?P<unit_price>{AMOUNT})[ \t]+(?P<total>{AMOUNT})'

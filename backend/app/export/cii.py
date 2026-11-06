@@ -125,7 +125,10 @@ def build_cii(invoice: Invoice, profile: Profile = "zugferd") -> bytes:
             _sub(product, "ram:SellerAssignedID", line.seller_item_id)
         _sub(product, "ram:Name", line.name)
         agreement = _sub(item, "ram:SpecifiedLineTradeAgreement")
-        _sub(_sub(agreement, "ram:NetPriceProductTradePrice"), "ram:ChargeAmount", _number(line.unit_price))
+        net_price = _sub(agreement, "ram:NetPriceProductTradePrice")
+        _sub(net_price, "ram:ChargeAmount", _number(line.unit_price))
+        if line.price_base_quantity != 1:  # BT-149/150, e.g. price per 100 kg
+            _sub(net_price, "ram:BasisQuantity", _number(line.price_base_quantity), unitCode=line.unit_code)
         delivery = _sub(item, "ram:SpecifiedLineTradeDelivery")
         _sub(delivery, "ram:BilledQuantity", _number(line.quantity), unitCode=line.unit_code)
         settlement = _sub(item, "ram:SpecifiedLineTradeSettlement")

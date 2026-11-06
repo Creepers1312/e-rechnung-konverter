@@ -32,6 +32,11 @@ fields:
   total_net: '(?:Netto(?:betrag|summe)?|Zwischensumme|Warenwert|Summe[ \t]+netto|Gesamt[ \t]+netto){SEP}({AMOUNT})'
   total_tax: '(?:MwSt|USt|Umsatzsteuer|Mehrwertsteuer)\.?(?:[ \t]+(?:Total|gesamt|Betrag))?(?:[ \t]*\d{1,2}(?:,\d+)?[ \t]*%)?{SEP}({AMOUNT})'
   total_gross: '(?:Brutto(?:betrag|summe)?|Gesamtbetrag|Rechnungsbetrag|Rechnungssumme|Endbetrag|Endsumme|Gesamtsumme|Zu[ \t]+zahlen){SEP}({AMOUNT})'
+  # price unit from the table header, e.g. "Preis / 1000 KG", "Price / 100 KG" (BT-149; default 1)
+  price_base: '(?:Preis|Price)[ \t]*/[ \t]*(\d+)[ \t]*(?:KG|TO|T|ST|STK|PC|M|L)\b'
+  # tax-free deliveries: only applied when the invoice prints no tax
+  export_hint: '(tax[ \t]+free[ \t]+export|steuerfreie[ \t]+Ausfuhr|Ausfuhrlieferung)'
+  intra_eu_hint: '(innergemeinschaftliche[ \t]+Lieferung|intra-?community[ \t]+(?:supply|delivery))'
 
 # Line items, between `start` and `end` (both optional). Either
 #   pattern:        one item per text line (searched line by line), or
