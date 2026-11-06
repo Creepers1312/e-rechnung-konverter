@@ -23,17 +23,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import customers, review
 from .admin import router as admin_router
 from .auth import bootstrap_admin, current_user
+from .companies_api import router as companies_router
 from .company import Company
 from .convert import EInvoice, NotExportable, convert
 from .db import Document, ReviewItem, User, archive, audit, get_engine, get_session, get_setting, search_documents
 from .docs import router as docs_router
-from .erp.sap_ecc_idoc import parse_invoic02
+from .erp.sap_ecc_idoc import parse_invoic02, pick_company
 from .export.cii import Profile, build_cii
 from .export.zugferd import check_xsd
-from .extraction.rules import ExtractionResult, extract
+from .extraction.rules import ExtractionResult
 from .model import Invoice, Party, Totals, compute_totals
 from .ocr import text_of_pdf
-from .settings import get_company
+from .recognize import recognize_pdf
+from .settings import company_for_invoice, get_companies, get_company
 from .stats import router as stats_router
 from .validation import Issue, StatedTotals, validate
 from .worker import STATUS_KEY
@@ -53,6 +55,7 @@ app = FastAPI(title="E-Rechnung Konverter", version="0.3.0", lifespan=lifespan)
 app.include_router(admin_router)
 app.include_router(stats_router)
 app.include_router(docs_router)
+app.include_router(companies_router)
 
 
 class ValidateRequest(BaseModel):
@@ -94,6 +97,7 @@ class ZipRequest(BaseModel):
 class ImportResult(BaseModel):
     invoice: Invoice
     notes: list[str] = Field(default_factory=list)
+    company_id: str = ""
 
 
 class ReviewInfo(BaseModel):
@@ -119,6 +123,7 @@ class ReviewDetail(ReviewInfo):
     notes: list[str]
     template_name: str
     has_pdf: bool
+    company_id: str = ""
 
 
 class Dashboard(BaseModel):
@@ -201,19 +206,26 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/company", response_model=Company)
-def company(_: User = Depends(current_user), session: Session = Depends(get_session)) -> Company:
-    return get_company(session)
+def company(
+    company_id: str | None = Query(None, max_length=50),
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
+) -> Company:
+    return get_company(session, company_id)
 
 
 @app.post("/api/extract", response_model=ExtractionResult)
 async def extract_pdf(
-    file: UploadFile = File(...), _: User = Depends(current_user), session: Session = Depends(get_session)
+    file: UploadFile = File(...),
+    company_id: str = Form(""),
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
 ) -> ExtractionResult:
     data = await _read(file)
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "Keine PDF-Datei.")
     pdf, ocr_problem = text_of_pdf(data, file.filename or "scan.pdf")
-    result = extract(pdf, get_company(session))
+    result = recognize_pdf(session, pdf, company_id or None)
     if ocr_problem:
         result.warnings.insert(0, ocr_problem)
     result.notes += _filled_note(customers.fill(session, result.invoice))
@@ -226,10 +238,12 @@ async def import_idoc(
 ) -> ImportResult:
     """Manual import of one INVOIC02 XML file (the worker automates this for the inbox folder)."""
     try:
-        invoice = parse_invoic02(await _read(file), get_company(session))
+        xml = await _read(file)
+        company = pick_company(xml, get_companies(session))
+        invoice = parse_invoic02(xml, company)
     except (ValueError, SyntaxError) as exc:
         raise HTTPException(400, f"IDoc konnte nicht gelesen werden: {exc}") from exc
-    return ImportResult(invoice=invoice, notes=_filled_note(customers.fill(session, invoice)))
+    return ImportResult(invoice=invoice, notes=_filled_note(customers.fill(session, invoice)), company_id=company.id)
 
 
 @app.get("/api/customers", response_model=list[CustomerInfo])
@@ -387,6 +401,7 @@ def review_detail(review_id: int, _: User = Depends(current_user), session: Sess
         "notes": item.notes,
         "template_name": item.template_name,
         "has_pdf": item.pdf is not None,
+        "company_id": company_for_invoice(Invoice.model_validate(item.invoice), get_companies(session)).id,
     }
 
 

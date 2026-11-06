@@ -77,6 +77,12 @@ DESCRIPTIONS: dict[str, str] = {
     "list_customers": "Kundenstamm/Adressbuch mit Filter „ohne E-Rechnungs-Adresse“.",
     "customer_import_info": "Letzter Kundenstamm-Import und zuordenbare Felder.",
     "customer_import_upload": "Kundenstamm-CSV hochladen und sofort importieren.",
+    "companies": "Eigene Firmen (Auswahl im Editor); die erste ist der Standard.",
+    "pdf_words": "Wörter mit Position aus einem PDF (Scans per OCR) – für die Feldverknüpfung in der Vorschau.",
+    "linkable_fields": "Formularfelder, die mit einer Stelle im PDF verknüpft werden können.",
+    "list_links": "Gespeicherte Feldverknüpfungen einer Firma.",
+    "save_link": "Feldverknüpfung speichern: Feld X steht bei Firma Y an dieser Stelle (wird protokolliert).",
+    "delete_link": "Feldverknüpfung löschen (wird protokolliert).",
     "read_audit": "Protokoll: Anmeldungen, Exporte, Downloads, Änderungen.",
 }
 

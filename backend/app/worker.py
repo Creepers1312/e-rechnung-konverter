@@ -41,10 +41,10 @@ from .convert import NotExportable, convert
 from .db import archive, get_engine, get_setting, put_setting
 from .erp.sap_ecc_idoc import SapEccIdocFolderAdapter
 from .export.cii import Profile
-from .extraction.rules import extract
 from .model import Invoice
 from .ocr import text_of_pdf
-from .settings import get_company, get_customer_import_settings, get_idoc_settings, get_pdf_inbox_settings
+from .recognize import recognize_pdf
+from .settings import get_companies, get_customer_import_settings, get_idoc_settings, get_pdf_inbox_settings
 from .validation import validate
 
 log = logging.getLogger("erechnung.worker")
@@ -138,7 +138,7 @@ def process_once(folders: Folders, profile: Profile, session: Session, now: floa
 
 
 def process_idocs(folders: Folders, profile: Profile, session: Session, now: float | None = None) -> RoundResult:
-    adapter = SapEccIdocFolderAdapter(folders.inbox, get_company(session))
+    adapter = SapEccIdocFolderAdapter(folders.inbox, get_companies(session))
     result = RoundResult()
     for path in list(_ready_files(folders.inbox, ".xml", time.time() if now is None else now)):
         try:
@@ -178,7 +178,6 @@ def process_pdfs(
     folders: Folders, profile: Profile, session: Session, *, auto_export: bool = True, now: float | None = None
 ) -> RoundResult:
     """PDF inbox: OCR (scans) -> recognition -> address book -> validate -> convert or review queue."""
-    company = get_company(session)
     result = RoundResult()
     for path in list(_ready_files(folders.inbox, ".pdf", time.time() if now is None else now)):
         try:
@@ -186,7 +185,7 @@ def process_pdfs(
             if not data.startswith(b"%PDF"):
                 raise ValueError("Keine PDF-Datei.")
             pdf, ocr_problem = text_of_pdf(data, path.name)
-            extracted = extract(pdf, company)
+            extracted = recognize_pdf(session, pdf)
         except Exception as exc:
             session.rollback()
             _fail(folders, path, exc)

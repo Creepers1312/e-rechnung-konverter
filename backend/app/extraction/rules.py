@@ -36,6 +36,7 @@ class ExtractionResult(BaseModel):
     stated_totals: StatedTotals = Field(default_factory=StatedTotals)
     template_id: str
     template_name: str
+    company_id: str = ""  # own company the invoice was recognised for (see recognize.py)
     warnings: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)  # informational, e.g. "filled from address book"
     ocr: bool = False  # text came from OCR (scanned PDF)
@@ -318,19 +319,6 @@ def extract_buyer(cfg: dict[str, Any], pdf: PdfText, seller_name: str) -> Party:
         postcode=m["postcode"],
         city=m["city"].strip(),
         country_code=country,
-    )
-    return party
-    m = POSTCODE_CITY.match(rows[pc_index])
-    assert m
-    # Typical block: name, [extra lines like "z. Hd. ..."], street, postcode + city
-    names = rows[: max(pc_index - 1, 0)]
-    party.name = names[0] if names else ""
-    party.address = Address(
-        line1=rows[pc_index - 1] if pc_index >= 1 else "",
-        line2=" ".join(names[1:]),
-        postcode=m["postcode"],
-        city=m["city"].strip(),
-        country_code="DE" if not m["cc"] or m["cc"] == "D" else m["cc"],
     )
     return party
 

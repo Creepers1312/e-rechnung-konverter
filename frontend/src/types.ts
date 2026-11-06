@@ -77,6 +77,7 @@ export interface ExtractionResult {
   notes: string[];
   raw_text: string;
   ocr: boolean;
+  company_id: string;
 }
 
 export interface Issue {
@@ -134,8 +135,10 @@ export interface CurrentUser {
 }
 
 export interface Company {
+  id: string;
   seller: Party;
   payment: PaymentInfo;
+  keywords: string[];
 }
 
 export interface IdocSettings {
@@ -157,7 +160,7 @@ export interface CustomerImportSettings {
 }
 
 export interface AdminSettings {
-  company: Company;
+  companies: Company[];
   idoc: IdocSettings;
   pdf_inbox: PdfInboxSettings;
   customer_import: CustomerImportSettings;
@@ -174,6 +177,7 @@ export interface AuditEntry {
 export interface ImportResult {
   invoice: Invoice;
   notes: string[];
+  company_id: string;
 }
 
 export interface DocumentPage {
@@ -256,6 +260,7 @@ export interface ReviewDetail extends ReviewInfo {
   notes: string[];
   template_name: string;
   has_pdf: boolean;
+  company_id: string;
 }
 
 export interface Dashboard {
@@ -323,4 +328,45 @@ export interface DocEndpoint {
   path: string;
   access: string;
   summary: string;
+}
+
+export interface PdfWord {
+  text: string;
+  x0: number;
+  top: number;
+  x1: number;
+  bottom: number;
+}
+
+export interface PdfPageWords {
+  page: number;
+  width: number;
+  height: number;
+  words: PdfWord[];
+}
+
+export interface PdfWords {
+  pages: PdfPageWords[];
+  ocr: boolean;
+  warning: string;
+}
+
+export interface FieldLinkIn {
+  company_id: string;
+  field: string;
+  page: number;
+  x0: number;
+  top: number;
+  x1: number;
+  bottom: number;
+  anchor_text: string;
+  anchor_x0: number | null;
+  anchor_top: number | null;
+  sample: string;
+}
+
+export interface FieldLink extends FieldLinkIn {
+  id: number;
+  label: string;
+  updated_by: string;
 }

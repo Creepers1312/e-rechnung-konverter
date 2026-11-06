@@ -43,6 +43,12 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
   E-Rechnungs-Adresse oder Leitweg-ID, werden sie automatisch ergänzt – auch beim
   SAP-Worker. Vorhandene Werte werden nie überschrieben. Manuelle Suche über
   „Aus Adressbuch übernehmen“ im Käufer-Bereich.
+- **Mehrere eigene Firmen:** bis zu 10 Rechnungssteller (Verwaltung → Firmen); jede Rechnung
+  wird automatisch der richtigen Firma zugeordnet (USt-IdNr., IBAN, Name; IDocs über die eigene
+  USt-IdNr.), im Editor umschaltbar.
+- **Felder im PDF zuordnen:** Wert in der PDF-Vorschau anklicken, dann das Formularfeld – die
+  Stelle wird je Firma gemerkt und bei den nächsten Rechnungen automatisch gelesen (auch wenn
+  der Block verrutscht oder der Wert länger ist).
 - **Startseite mit Kennzahlen:** E-Rechnungen pro Tag (automatisch/von Hand), Volumen pro
   Monat, Automatisierungsquote, Formate/Quellen, Top-Käufer, Ø Zeit bis zur Freigabe.
 - **Hilfe in der App:** Anwenderhandbuch mit Screenshots für alle, Systemdokumentation
@@ -83,6 +89,9 @@ Das Skript
 
 **Update:** einfach erneut `./deploy.sh` im selben Ordner – sichert zuerst die Datenbank,
 holt den neuen Code (`git pull`), baut und startet neu. Einstellungen bleiben erhalten.
+Zum Schluss räumt es auf: alte, nicht mehr benutzte Docker-Images dieses Updates und Build-Cache
+älter als 7 Tage (nie Container, Volumes, Netzwerke oder benannte Images anderer Anwendungen);
+abschaltbar mit `./deploy.sh --no-prune`.
 
 **Ohne Rückfragen** (z. B. für Automatisierung):
 
@@ -240,8 +249,9 @@ cd frontend && pnpm typecheck       # Frontend-Typprüfung
 
 ## Eigene Firmendaten
 
-Die Verkäuferdaten (Name, Anschrift, USt-IdNr., Kontakt, Bankverbindung) kommen
-aus `backend/config/company.yaml`. Als Vorlage dient `company.example.yaml`.
+Die eigenen Firmen (Rechnungssteller: Name, Anschrift, USt-IdNr., Kontakt, Bankverbindung)
+pflegt ein Administrator unter **Verwaltung → Firmen (Stammdaten)** – auch mehrere. Bis zum
+ersten Speichern kommen die Daten aus `backend/config/company.yaml`. Als Vorlage dient `company.example.yaml`.
 `company.yaml` ist in `.gitignore` eingetragen. Alternativ kann der Pfad über
 `ERECHNUNG_COMPANY_FILE` gesetzt werden.
 
@@ -312,6 +322,8 @@ backend/
   app/customers.py          Käufer-Adressbuch (merken, ergänzen, suchen)
   app/customer_import.py    SAP-Kundenstamm (CSV) ins Adressbuch importieren
   app/stats.py              Kennzahlen der Startseite
+  app/recognize.py          Firma erkennen + Regeln + Feldverknüpfungen
+  app/field_links.py        Feldverknüpfungen (Klick im PDF -> Formularfeld), je Firma
   app/docs.py, app/handbuch/  Anwenderhandbuch + Systemdokumentation (Markdown, Screenshots)
   app/ocr.py                Anbindung des OCR-Dienstes (Scans ohne Textebene)
   app/review.py             Prüfliste „Zu prüfen“

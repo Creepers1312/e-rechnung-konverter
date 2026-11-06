@@ -68,6 +68,19 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 - **Käuferdaten** wie E-Rechnungs-Adresse oder Leitweg-ID werden aus dem Kundenstamm (SAP) bzw. aus früheren Rechnungen ergänzt. Unter „Käufer“ können Sie über **„Aus Adressbuch übernehmen“** auch selbst suchen.
 - Mit **„PDF ausblenden“** bekommt das Formular mehr Platz.
 - Wechseln Sie ruhig zwischendurch die Seite – die angefangene Rechnung bleibt erhalten.
+- **Firma:** Arbeiten Sie für mehrere eigene Firmen, erkennt die App am Briefkopf (USt-IdNr., IBAN, Name), welche Firma die Rechnung ausgestellt hat. Oben in der Leiste steht die erkannte **Firma**; stimmt sie nicht, wählen Sie die richtige aus.
+
+### Felder im PDF zuordnen (statt abtippen)
+
+Hat die Erkennung ein Feld falsch oder gar nicht gelesen, zeigen Sie der App einfach, wo der Wert steht:
+
+1. Über der PDF-Vorschau auf **„Felder zuordnen“** klicken. Die Wörter im PDF werden leicht blau hinterlegt.
+2. Den Wert im PDF **anklicken** – z. B. die Rechnungsnummer. Mehrere Wörter (etwa eine Firmenanschrift) wählen Sie aus, indem Sie mit gedrückter Maustaste einen **Rahmen ziehen**.
+3. Rechts das passende **Feld im Formular anklicken**. Der Wert wird eingetragen.
+
+![Felder im PDF zuordnen](img/felder-zuordnen.png)
+
+Die Zuordnung wird **für diese Firma gespeichert**: Bei den nächsten Rechnungen derselben Firma liest die App das Feld automatisch an dieser Stelle – auch wenn der Wert länger ist oder der Block etwas verrutscht (die Beschriftung daneben, z. B. „Beleg-Nr.:“, dient als Bezugspunkt). Gespeichert wird für die Kopfdaten (Nummer, Daten, Referenzen, Käuferanschrift, Fälligkeit …); Positionen werden nur übernommen, nicht dauerhaft verknüpft. Mit **„Zuordnen beenden“** schalten Sie den Modus wieder aus. Gespeicherte Zuordnungen sind grün umrandet.
 
 ### Mehrere Rechnungen auf einmal (Stapel)
 
@@ -116,6 +129,9 @@ Haben Sie Ihr Passwort vergessen, kann ein Administrator es zurücksetzen. Sie v
 
 **Die Rechnung zeigt „Name des Käufers fehlt“, obwohl er auf dem PDF steht.**
 Bei ungewöhnlichen Briefbögen oder schlechten Scans findet die Erkennung den Käufer nicht immer. Tragen Sie ihn ein oder übernehmen Sie ihn aus dem Adressbuch. Fällt das bei einem Layout häufig auf, kann der Administrator eine Vorlage dafür anlegen.
+
+**Eine gespeicherte Feldzuordnung ist falsch.**
+Ordnen Sie das Feld einfach neu zu – die alte Zuordnung wird ersetzt. Ein Administrator kann Zuordnungen unter **Verwaltung → Firmen** auch löschen.
 
 **Wann ZUGFeRD, wann XRechnung?**
 Für Unternehmen genügt in der Regel ZUGFeRD. Öffentliche Auftraggeber verlangen meist XRechnung und eine **Leitweg-ID**.

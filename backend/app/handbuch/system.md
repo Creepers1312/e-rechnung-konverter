@@ -73,6 +73,8 @@ Die Oberfläche spricht ausschließlich über die REST-API unter `/api`. Regeln:
 | Ablage | `IDOC_HOST_DIR/inbox` (Standard `data/idoc/inbox`) |
 | Ergebnis | E-Rechnung in `outbox/`, IDoc nach `processed/`; unlesbare Dateien nach `error/` mit `.error.txt` |
 
+Die ausstellende Firma wird über die eigene USt-IdNr. im IDoc (`E1EDK01`/`EIGENUINR`) bzw. den Namen des Partners `RS` bestimmt; ohne Treffer gilt die Standard-Firma.
+
 Verwendete Segmente: `E1EDK01` (Währung, USt-IdNrn.), `E1EDKA1` (Partner: `RS` Rechnungssteller, `RE` Rechnungsempfänger), `E1EDK02` (Referenzen: `009` Rechnungsnr., `001` Bestellung), `E1EDK03` (Daten), `E1EDK18` (Zahlungsbedingungen), `E1EDP01` mit `E1EDP19/26/04` (Positionen, Beträge, Steuer). Die Zuordnung steht in `MAPPING` in `backend/app/erp/sap_ecc_idoc.py` und sollte mit einem echten IDoc aus dem System abgeglichen werden (WE02).
 
 ### SAP-Kundenstamm (CSV)
@@ -123,6 +125,8 @@ Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der
 | Export | CII-XML; für ZUGFeRD in PDF/A-3 eingebettet | `app/export/`, `app/convert.py` |
 | Archiv | jede erzeugte Rechnung samt Datei in der Datenbank; Suche, ZIP-Download | Tabelle `documents` |
 | Zu prüfen | Prüfliste für unvollständige automatische Eingänge, Original bleibt gespeichert | Tabelle `review_items` |
+| Mehrere Firmen | bis zu 10 eigene Firmen (Rechnungssteller); Zuordnung eines Dokuments über USt-IdNr., Steuernummer, IBAN, Erkennungsmerkmale, Name; IDocs über `EIGENUINR` | Einstellung `companies`, `app/settings.py`, `app/recognize.py` |
+| Feldverknüpfungen | Wert im PDF anklicken → Formularfeld; je Firma gespeichert und bei den nächsten Rechnungen angewendet (Bezug: Beschriftung neben/über dem Wert) | Tabelle `field_links`, `app/field_links.py` |
 | Adressbuch / Kundenstamm | ergänzt Käuferdaten über Kundennummer bzw. Name | Tabelle `customers`, `app/customers.py`, `app/customer_import.py` |
 | Kennzahlen | Startseite: Rechnungen pro Tag/Monat, Volumen, Automatisierungsquote, Prüfdauer | `GET /api/dashboard/stats` |
 | Benutzer & Rollen | Benutzer/Administrator, Sperren, Passwort zurücksetzen | Tabellen `users`, `sessions` |
@@ -135,9 +139,10 @@ Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der
 |---|---|
 | `documents` | erzeugte E-Rechnungen (Metadaten, Rechnung als JSON, Datei) |
 | `review_items` | Einträge in „Zu prüfen“ inkl. Fehlern und Original-PDF |
+| `field_links` | Feldverknüpfungen je Firma: Feld, Seite, Rahmen in PDF-Punkten, Bezugsbeschriftung, Beispielwert |
 | `customers` | Käufer-Adressbuch und SAP-Kundenstamm (`source` = `sap` / `rechnung`) |
 | `users`, `sessions` | Benutzer (Argon2id-Hash) und Sitzungen (nur Hash des Tokens) |
-| `settings` | Einstellungen als JSON: `company`, `idoc`, `pdf_inbox`, `customer_import`, Statusmeldungen des Workers |
+| `settings` | Einstellungen als JSON: `companies`, `idoc`, `pdf_inbox`, `customer_import`, Statusmeldungen des Workers |
 | `audit_log` | Protokoll sicherheitsrelevanter Aktionen |
 
 Fehlende Spalten älterer Versionen werden beim Start ergänzt. Ohne `DATABASE_URL` (lokale Entwicklung) nutzt das Backend SQLite.
@@ -151,8 +156,12 @@ Fehlende Spalten älterer Versionen werden beim Start ergänzt. Ohne `DATABASE_U
 
 ![Eingänge und Automatik](img/admin-eingaenge.png)
 
+- **Firmen (Stammdaten):** die eigenen Firmen (Rechnungssteller) mit Anschrift, USt-IdNr., Bankverbindung, Zahlungsbedingungen und optionalen Erkennungsmerkmalen; die erste ist der Standard. Je Firma die gespeicherten **Feldverknüpfungen** (Feld, Beispielwert, Bezugsbeschriftung, wer) mit „Löschen“. Wird eine Firma entfernt, werden ihre Verknüpfungen beim Speichern gelöscht.
+
+![Firmen](img/admin-firmen.png)
+
 - **Kundenstamm (SAP):** letzter Import, Upload, Spaltenzuordnung, Kunden ohne E-Rechnungs-Adresse.
-- **Einstellungen & Konnektoren:** eigene Firmendaten (Verkäufer), IDoc- und PDF-Eingang (an/aus, Format, Intervall, Vollautomatik).
+- **Einstellungen & Konnektoren:** IDoc- und PDF-Eingang (an/aus, Format, Intervall, Vollautomatik).
 
 ![Einstellungen](img/admin-einstellungen.png)
 

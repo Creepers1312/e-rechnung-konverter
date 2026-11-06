@@ -8,7 +8,11 @@ import type {
   DocumentFilter,
   DocumentPage,
   ExtractionResult,
+  Company,
   Dashboard,
+  FieldLink,
+  FieldLinkIn,
+  PdfWords,
   DashboardStats,
   DocEndpoint,
   ImportReport,
@@ -65,8 +69,10 @@ function upload(file: File): FormData {
   return form;
 }
 
-export async function extractPdf(file: File): Promise<ExtractionResult> {
-  const res = await check(await apiFetch("/api/extract", { method: "POST", body: upload(file) }));
+export async function extractPdf(file: File, companyId = ""): Promise<ExtractionResult> {
+  const body = upload(file);
+  if (companyId) body.append("company_id", companyId);
+  const res = await check(await apiFetch("/api/extract", { method: "POST", body }));
   return res.json();
 }
 
@@ -273,4 +279,34 @@ export async function importCustomerMaster(file: File): Promise<ImportReport> {
   const form = new FormData();
   form.append("file", file);
   return (await check(await apiFetch("/api/admin/customers/import", { method: "POST", body: form }))).json();
+}
+
+// --- own companies & click-to-link fields ---------------------------------------------
+
+export async function listCompanies(): Promise<Company[]> {
+  return (await check(await apiFetch("/api/companies"))).json();
+}
+
+export async function getPdfWords(file: File): Promise<PdfWords> {
+  return (await check(await apiFetch("/api/pdf/words", { method: "POST", body: upload(file) }))).json();
+}
+
+export async function listFieldLinks(companyId: string): Promise<FieldLink[]> {
+  return (await check(await apiFetch(`/api/field-links?company_id=${encodeURIComponent(companyId)}`))).json();
+}
+
+export async function saveFieldLink(link: FieldLinkIn): Promise<FieldLink> {
+  return (
+    await check(
+      await apiFetch("/api/field-links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(link),
+      }),
+    )
+  ).json();
+}
+
+export async function deleteFieldLink(id: number): Promise<void> {
+  await check(await apiFetch(`/api/field-links/${id}`, { method: "DELETE" }));
 }

@@ -17,11 +17,13 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     LargeBinary,
     Numeric,
     String,
+    UniqueConstraint,
     create_engine,
     func,
     inspect,
@@ -150,6 +152,32 @@ class ReviewItem(Base):
     pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)  # original file (PDF sources)
     document_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # archive entry once done
     resolved_by: Mapped[str] = mapped_column(String(100), default="")
+
+
+class FieldLink(Base):
+    """A form field linked to a spot on an own company's invoice layout (click-to-link in the preview).
+
+    The box is in PDF points (origin top-left) on `page`. `anchor_*` is the label next to
+    or above the value at the time of linking; if the layout shifts, the box moves with it.
+    """
+
+    __tablename__ = "field_links"
+    __table_args__ = (UniqueConstraint("company_id", "field", name="uq_field_links_company_field"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[str] = mapped_column(String(50), index=True)
+    field: Mapped[str] = mapped_column(String(100))
+    page: Mapped[int] = mapped_column(Integer, default=1)
+    x0: Mapped[float] = mapped_column(Float)
+    top: Mapped[float] = mapped_column(Float)
+    x1: Mapped[float] = mapped_column(Float)
+    bottom: Mapped[float] = mapped_column(Float)
+    anchor_text: Mapped[str] = mapped_column(String(255), default="")
+    anchor_x0: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anchor_top: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sample: Mapped[str] = mapped_column(String(255), default="")  # value at the time of linking
+    updated_by: Mapped[str] = mapped_column(String(100), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
 def database_url() -> str:

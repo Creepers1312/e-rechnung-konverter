@@ -1,3 +1,4 @@
+import { Companies } from "./Companies";
 import { CustomerMaster } from "./CustomerMaster";
 import { useEffect, useState } from "react";
 import {
@@ -11,7 +12,7 @@ import {
   saveSettings,
   updateUser,
 } from "./api";
-import { Field, PartyFields, setPath } from "./InvoiceForm";
+import { setPath } from "./InvoiceForm";
 import type { AdminSettings, AuditEntry, CurrentUser, InboxStatus, Role } from "./types";
 
 function message(err: unknown): string {
@@ -23,7 +24,7 @@ function fmt(date: string | null): string {
   return date ? new Date(date).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–";
 }
 
-type Tab = "users" | "idoc" | "kunden" | "settings" | "audit";
+type Tab = "users" | "firmen" | "idoc" | "kunden" | "settings" | "audit";
 
 export function Admin({ me }: { me: CurrentUser }) {
   const [tab, setTab] = useState<Tab>("users");
@@ -32,6 +33,7 @@ export function Admin({ me }: { me: CurrentUser }) {
       <nav className="tabs" role="tablist">
         {([
           ["users", "Benutzer"],
+          ["firmen", "Firmen (Stammdaten)"],
           ["idoc", "Eingänge & Automatik"],
           ["kunden", "Kundenstamm (SAP)"],
           ["settings", "Einstellungen & Konnektoren"],
@@ -45,6 +47,7 @@ export function Admin({ me }: { me: CurrentUser }) {
         )}
       </nav>
       {tab === "users" && <Users me={me} />}
+      {tab === "firmen" && <Companies />}
       {tab === "idoc" && <InboxPanel />}
       {tab === "kunden" && <CustomerMaster />}
       {tab === "settings" && <SettingsPanel />}
@@ -187,9 +190,6 @@ function SettingsPanel() {
 
   if (!settings) return error ? <div className="alert error">{error}</div> : <p className="hint">Lädt …</p>;
   const update = (path: string, value: unknown) => setSettings((s) => s && setPath(s, path, value));
-  const f = (label: string, path: string, value: string, wide = false) => (
-    <Field label={label} path={path} value={value} update={update} issues={[]} wide={wide} />
-  );
 
   async function save() {
     setError("");
@@ -273,20 +273,7 @@ function SettingsPanel() {
         </p>
       </section>
 
-      <section>
-        <h2>Eigene Firmendaten (Rechnungssteller)</h2>
-        <PartyFields prefix="company.seller" party={settings.company.seller} update={update} issues={[]} seller />
-      </section>
-
-      <section>
-        <h2>Bankverbindung & Zahlungsbedingungen</h2>
-        <div className="grid">
-          {f("IBAN", "company.payment.iban", settings.company.payment.iban)}
-          {f("BIC", "company.payment.bic", settings.company.payment.bic)}
-          {f("Kontoinhaber", "company.payment.account_holder", settings.company.payment.account_holder)}
-          {f("Standard-Zahlungsbedingungen", "company.payment.terms", settings.company.payment.terms, true)}
-        </div>
-      </section>
+      <p className="hint">Eigene Firmendaten (Rechnungssteller, Bankverbindung): Reiter „Firmen (Stammdaten)“.</p>
 
       {error && <div className="alert error" role="alert">{error}</div>}
       {info && <div className="alert info">{info}</div>}
@@ -311,6 +298,8 @@ const ACTIONS: Record<string, string> = {
   settings_changed: "Einstellungen geändert",
   idoc_retry: "Datei erneut eingereiht",
   review_discarded: "Prüfeintrag verworfen",
+  field_linked: "Feld verknüpft",
+  field_unlinked: "Feldverknüpfung gelöscht",
   customers_imported: "Kundenstamm importiert",
 };
 

@@ -1,15 +1,45 @@
 import { useEffect, useRef, useState } from "react";
-import { exportInvoice, getReview, getReviewPdf, listReview, validateInvoice } from "./api";
+import {
+  exportInvoice,
+  getReview,
+  getReviewPdf,
+  listCompanies,
+  listFieldLinks,
+  listReview,
+  saveFieldLink,
+  validateInvoice,
+} from "./api";
 import { type BatchItem, BatchList, type Loaded, loadFile, processItem } from "./Batch";
 import { InvoiceForm, setPath } from "./InvoiceForm";
+import { type Selection, valueFor } from "./linking";
 import { PdfPreview } from "./PdfPreview";
 import { navigate } from "./router";
-import type { Invoice, Issue, Profile, ValidateResponse } from "./types";
+import type { Company, FieldLink, Invoice, Issue, Profile, ValidateResponse } from "./types";
 import { showToast } from "./toast";
 import { describe, download, eur } from "./util";
 import { onWorkspaceRequest } from "./workspace";
 
 const ACCEPT = ".pdf,.xml,application/pdf,application/xml,text/xml";
+
+// header fields that can be linked permanently (same list as backend field_links.LINKABLE)
+const LINKABLE: Record<string, string> = {
+  number: "Rechnungsnummer",
+  issue_date: "Rechnungsdatum",
+  delivery_date: "Liefer-/Leistungsdatum",
+  buyer_reference: "Leitweg-ID / Käuferreferenz",
+  order_reference: "Bestellnummer",
+  note: "Bemerkung",
+  "buyer.name": "Käufer: Name",
+  "buyer.address.line1": "Käufer: Straße",
+  "buyer.address.line2": "Käufer: Adresszusatz",
+  "buyer.address.postcode": "Käufer: PLZ",
+  "buyer.address.city": "Käufer: Ort",
+  "buyer.vat_id": "Käufer: USt-IdNr.",
+  "buyer.electronic_address": "Käufer: E-Rechnungs-Adresse",
+  "buyer.erp_id": "Käufer: Kundennummer",
+  "payment.terms": "Zahlungsbedingungen",
+  "payment.due_date": "Fälligkeit",
+};
 
 function stored(key: string, fallback: string): string {
   try {
@@ -50,7 +80,93 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
   const [batchRunning, setBatchRunning] = useState(false);
   const [openBatchId, setOpenBatchId] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [linkMode, setLinkMode] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [links, setLinks] = useState<FieldLink[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    listCompanies()
+      .then(setCompanies)
+      .catch(() => undefined);
+  }, []);
+
+  // saved links of the current company (shown as frames in the preview)
+  const companyId = loaded?.companyId ?? "";
+  useEffect(() => {
+    setLinks([]);
+    if (!companyId || !linkMode) return;
+    listFieldLinks(companyId)
+      .then(setLinks)
+      .catch(() => undefined);
+  }, [companyId, linkMode]);
+  const company = companies.find((c) => c.id === companyId);
+  const companyName = company?.seller.name || "diese Firma";
+
+  /** Link mode: a value is selected in the PDF and a form field was clicked. */
+  function assign(e: React.MouseEvent) {
+    if (!linkMode || !selection || !invoice) return;
+    const target = e.target as HTMLElement;
+    const sel = "input[data-path], textarea[data-path]";
+    const input =
+      target.closest<HTMLInputElement | HTMLTextAreaElement>(sel) ??
+      target.closest("label")?.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel);
+    if (!input) return;
+    e.preventDefault();
+    const path = input.dataset.path!;
+    const value = valueFor(path, input.type, selection.text);
+    if (value === null) {
+      showToast(`„${selection.text}“ passt nicht in dieses Feld.`);
+      return;
+    }
+    setInvoice((inv) => inv && setPath(inv, path, input.type === "date" ? value || null : value));
+    const picked = selection;
+    setSelection(null);
+    if (!(path in LINKABLE) || !companyId) {
+      showToast("Wert übernommen. (Positionen werden nicht dauerhaft verknüpft.)");
+      return;
+    }
+    saveFieldLink({
+      company_id: companyId,
+      field: path,
+      page: picked.page,
+      ...picked.box,
+      anchor_text: picked.anchor?.text ?? "",
+      anchor_x0: picked.anchor?.x0 ?? null,
+      anchor_top: picked.anchor?.top ?? null,
+      sample: picked.text.slice(0, 255),
+    })
+      .then((saved) => {
+        setLinks((ls) => [...ls.filter((l) => l.field !== saved.field), saved]);
+        showToast(`„${LINKABLE[path]}“ verknüpft – gilt ab jetzt für alle Rechnungen von ${companyName}.`);
+      })
+      .catch((err) => setErrors(describe(err)));
+  }
+
+  /** Another own company chosen in the editor: re-read a fresh PDF with its links, else swap the seller. */
+  async function switchCompany(id: string) {
+    if (!loaded || !invoice) return;
+    const c = companies.find((x) => x.id === id);
+    if (!c) return;
+    if (loaded.kind === "pdf" && !loaded.reviewId && loaded.file.size > 0) {
+      setBusy(true);
+      try {
+        open(await loadFile(loaded.file, id), openBatchId);
+      } catch (e) {
+        setErrors(describe(e));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setInvoice({
+      ...invoice,
+      seller: structuredClone(c.seller),
+      payment: { ...structuredClone(c.payment), due_date: invoice.payment.due_date, terms: invoice.payment.terms || c.payment.terms },
+    });
+    setLoaded({ ...loaded, companyId: id });
+  }
 
   // Re-validate (debounced) whenever the invoice or profile changes.
   useEffect(() => {
@@ -75,6 +191,7 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
     setCheck(null);
     setErrors([]);
     setOpenBatchId(batchId);
+    setSelection(null);
     if (l.reviewProfile) setProfile(l.reviewProfile);
   }
 
@@ -101,6 +218,7 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
         warnings: r.warnings,
         notes: r.notes,
         templateName: r.template_name,
+        companyId: r.company_id,
         reviewId: r.id,
         reviewProfile: r.profile,
       });
@@ -280,6 +398,19 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
               </span>
             </div>
 
+            {companies.length > 1 && (
+              <label className="company-select" title="Rechnungssteller – Feldverknüpfungen gelten je Firma">
+                <span>Firma</span>
+                <select value={companyId} onChange={(e) => void switchCompany(e.target.value)} disabled={busy}>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.seller.name || c.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <div className={`chip ${!check ? "" : errorIssues.length ? "bad" : "good"}`}>
               {!check ? "Prüfe …" : errorIssues.length ? `${errorIssues.length} Fehler` : "✓ Bereit"}
             </div>
@@ -347,8 +478,21 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
           </div>
 
           <div className={`editor-body${showPreview ? " with-preview" : ""}`}>
-            {showPreview && <PdfPreview file={loaded.file} />}
-            <div className="editor-form">
+            {showPreview && (
+              <PdfPreview
+                file={loaded.file}
+                linkMode={linkMode}
+                onToggleLink={() => {
+                  setLinkMode((m) => !m);
+                  setSelection(null);
+                }}
+                selection={selection}
+                onSelect={setSelection}
+                links={links}
+                companyName={companyName}
+              />
+            )}
+            <div className={`editor-form${linkMode && selection ? " link-armed" : ""}`} onClickCapture={assign}>
               {(errorIssues.length > 0 || warningIssues.length > 0) && (
                 <IssueList errors={errorIssues} warnings={warningIssues} />
               )}

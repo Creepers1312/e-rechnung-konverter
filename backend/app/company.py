@@ -18,8 +18,14 @@ CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
 
 class Company(BaseModel):
+    """One own company (invoice issuer). Several are possible (e.g. a group of three companies)."""
+
+    id: str = ""  # stable key (field links are stored per company); assigned when an admin saves
     seller: Party = Field(default_factory=Party)
     payment: PaymentInfo = Field(default_factory=PaymentInfo)
+    # extra texts that identify this company's invoices (e.g. a letterhead slogan); the VAT ID,
+    # tax number, IBAN and name are used automatically
+    keywords: list[str] = Field(default_factory=list)
 
 
 def company_file() -> Path:

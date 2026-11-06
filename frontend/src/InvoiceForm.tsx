@@ -79,6 +79,7 @@ const UNITS: [string, string][] = [
   ["HUR", "Stunde"],
   ["DAY", "Tag"],
   ["KGM", "kg"],
+  ["TNE", "Tonne"],
   ["MTR", "Meter"],
   ["LTR", "Liter"],
   ["LS", "Pauschale"],
