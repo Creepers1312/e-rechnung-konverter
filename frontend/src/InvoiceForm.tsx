@@ -142,7 +142,7 @@ function LinesTable({
     );
   };
   return (
-    <div className="lines">
+    <div className="lines items">
       <table>
         <thead>
           <tr>

@@ -77,6 +77,7 @@ class DocumentInfo(BaseModel):
     source_name: str
     profile: str
     invoice_number: str
+    seller_name: str = ""
     buyer_name: str
     grand_total: Decimal
     currency: str
@@ -306,6 +307,7 @@ def documents(
     date_to: date | None = None,
     profile: Literal["zugferd", "xrechnung"] | None = None,
     source: Literal["pdf", "idoc", "manual"] | None = None,
+    seller: str | None = Query(None, max_length=255, description="eigene Firma (Name)"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     _: User = Depends(current_user),
@@ -318,6 +320,7 @@ def documents(
         date_to=date_to,
         profile=profile,
         source=source,
+        seller=seller,
         offset=offset,
         limit=limit,
     )

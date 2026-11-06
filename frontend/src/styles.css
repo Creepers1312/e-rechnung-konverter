@@ -168,7 +168,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .field.narrow { max-width: 260px; margin-bottom: 12px; }
 .field.end button.primary { width: auto; }
 
-.lines { overflow-x: auto; container-type: inline-size; container-name: lines; }
+.lines { overflow-x: auto; }
+.lines.items { container-type: inline-size; container-name: lines; }
 .lines table { width: 100%; border-collapse: collapse; min-width: 940px; }
 .lines th { text-align: left; font-size: 0.75rem; color: var(--muted); font-weight: 500; padding: 0 4px 6px; }
 .lines td { padding: 3px 4px; }
@@ -310,8 +311,8 @@ tr.status-fehler strong { color: var(--error); }
 .archive-head { display: flex; align-items: baseline; gap: 12px; }
 .archive-head h2 { margin-bottom: 8px; }
 .filters { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 12px; }
-.filters .field { flex: 0 1 160px; }
-.filters .field.grow { flex: 1 1 280px; }
+.filters .field { flex: 0 1 150px; min-width: 130px; }
+.filters .field.grow { flex: 1 1 220px; }
 .pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .pager .spacer { flex: 1; }
 .archive a { color: var(--accent); }
@@ -490,18 +491,18 @@ table.compact td, table.compact th { padding: 6px 8px; font-size: 0.86rem; }
 
 /* line items as cards when the form is narrow (e.g. next to the PDF preview) */
 @container lines (max-width: 900px) {
-  .lines table, .lines tbody { display: block; min-width: 0; }
-  .lines thead { display: none; }
-  .lines tr {
+  .lines.items table, .lines.items tbody { display: block; min-width: 0; }
+  .lines.items thead { display: none; }
+  .lines.items tr {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; position: relative;
     padding: 10px 34px 10px 0; border-bottom: 1px solid var(--border);
   }
-  .lines td { padding: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .lines td::before { content: attr(data-label); font-size: 0.72rem; color: var(--muted); }
-  .lines td.name { grid-column: span 2; }
-  .lines td input, .lines td select, .lines input.xs, .lines input.sm, .lines input.num:not(.xs) { width: 100%; min-width: 0; }
-  .lines td.del { position: absolute; right: 0; top: 26px; }
-  .lines td.del::before { content: none; }
+  .lines.items td { padding: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lines.items td::before { content: attr(data-label); font-size: 0.72rem; color: var(--muted); }
+  .lines.items td.name { grid-column: span 2; }
+  .lines.items td input, .lines.items td select, .lines.items input.xs, .lines.items input.sm, .lines.items input.num:not(.xs) { width: 100%; min-width: 0; }
+  .lines.items td.del { position: absolute; right: 0; top: 26px; }
+  .lines.items td.del::before { content: none; }
 }
 
 /* --- companies: cards + dialog --- */
@@ -561,6 +562,6 @@ dialog.modal form { display: flex; flex-direction: column; max-height: calc(100v
 .sum-ok { display: block; color: var(--ok); font-weight: 500; font-size: 0.75rem; }
 .sum-bad { display: block; color: var(--error); font-weight: 600; font-size: 0.75rem; }
 @container lines (max-width: 900px) {
-  .lines td.line-total { padding: 0; text-align: left; font-weight: 600; }
-  .lines td.name input { min-width: 0; }
+  .lines.items td.line-total { padding: 0; text-align: left; font-weight: 600; }
+  .lines.items td.name input { min-width: 0; }
 }
