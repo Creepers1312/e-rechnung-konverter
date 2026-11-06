@@ -302,3 +302,25 @@ export interface CustomerImportInfo {
   last: ImportReport | null;
   fields: { key: string; label: string }[];
 }
+
+export interface DashboardStats {
+  days: number;
+  currency: string;
+  daily: { date: string; automatic: number; manual: number }[];
+  monthly: { month: string; count: number; volume: string }[];
+  this_month: { count: number; volume: string };
+  last_month: { count: number; volume: string };
+  last_month_to_date: { count: number; volume: string };
+  automation_rate: number | null;
+  by_profile: Record<string, number>;
+  by_source: Record<string, number>;
+  top_buyers: { name: string; count: number; volume: string }[];
+  review: { open: number; resolved: number; discarded: number; avg_hours_to_resolve: number | null };
+}
+
+export interface DocEndpoint {
+  method: string;
+  path: string;
+  access: string;
+  summary: string;
+}

@@ -9,6 +9,8 @@ import type {
   DocumentPage,
   ExtractionResult,
   Dashboard,
+  DashboardStats,
+  DocEndpoint,
   ImportReport,
   ImportResult,
   InboxKind,
@@ -224,6 +226,16 @@ export async function retryInboxFile(kind: InboxKind, name: string): Promise<voi
 
 export async function getDashboard(): Promise<Dashboard> {
   return (await check(await apiFetch("/api/dashboard"))).json();
+}
+
+export async function getDashboardStats(days = 30): Promise<DashboardStats> {
+  return (await check(await apiFetch(`/api/dashboard/stats?days=${days}`))).json();
+}
+
+export async function getDoc(name: "anwender"): Promise<{ markdown: string }>;
+export async function getDoc(name: "system"): Promise<{ markdown: string; endpoints: DocEndpoint[] }>;
+export async function getDoc(name: "anwender" | "system") {
+  return (await check(await apiFetch(`/api/docs/${name}`))).json();
 }
 
 export async function listReview(): Promise<ReviewInfo[]> {

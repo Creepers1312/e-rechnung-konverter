@@ -67,6 +67,13 @@ comments and identifiers are English.
     `{SEP}`) are wrapped in groups by the engine. Multi-line items use
     `lines.block_pattern`.
 
+13. **In-app documentation** (`app/docs.py`, `app/handbuch/*.md`): the user
+    manual is for every user, the system documentation only for admins (served
+    by the API, never as static files; `admin-*.png` images are admin-only).
+    Every new `/api` endpoint needs a German entry in `docs.DESCRIPTIONS`
+    (a test enforces it). Screenshots only with invented demo data
+    (`backend/scripts/demo_data.py`, `frontend/scripts/screenshots.mjs`).
+
 ## Commands
 
 ```bash

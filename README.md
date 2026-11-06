@@ -43,6 +43,12 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
   E-Rechnungs-Adresse oder Leitweg-ID, werden sie automatisch ergänzt – auch beim
   SAP-Worker. Vorhandene Werte werden nie überschrieben. Manuelle Suche über
   „Aus Adressbuch übernehmen“ im Käufer-Bereich.
+- **Startseite mit Kennzahlen:** E-Rechnungen pro Tag (automatisch/von Hand), Volumen pro
+  Monat, Automatisierungsquote, Formate/Quellen, Top-Käufer, Ø Zeit bis zur Freigabe.
+- **Hilfe in der App:** Anwenderhandbuch mit Screenshots für alle, Systemdokumentation
+  (Architektur, Schnittstellen, Konfiguration, Betrieb, automatisch erzeugte REST-Endpunktliste)
+  nur für Administratoren. Texte in `backend/app/handbuch/`; Screenshots mit erfundenen
+  Demo-Daten neu erzeugen: `backend/scripts/demo_data.py` + `frontend/scripts/screenshots.mjs`.
 - **Kundenstamm aus SAP:** Kundendaten (Anschrift, USt-IdNr., E-Rechnungs-Adresse,
   Leitweg-ID) kommen täglich als CSV aus SAP und müssen nicht von Hand gepflegt werden –
   siehe „SAP ECC → Kundenstamm“.
@@ -305,6 +311,8 @@ backend/
   app/settings.py           Einstellungen aus der Datenbank (Firmendaten, SAP-Konnektor)
   app/customers.py          Käufer-Adressbuch (merken, ergänzen, suchen)
   app/customer_import.py    SAP-Kundenstamm (CSV) ins Adressbuch importieren
+  app/stats.py              Kennzahlen der Startseite
+  app/docs.py, app/handbuch/  Anwenderhandbuch + Systemdokumentation (Markdown, Screenshots)
   app/ocr.py                Anbindung des OCR-Dienstes (Scans ohne Textebene)
   app/review.py             Prüfliste „Zu prüfen“
   app/worker.py             SAP-IDoc- und PDF-Eingang -> E-Rechnungen oder Prüfliste

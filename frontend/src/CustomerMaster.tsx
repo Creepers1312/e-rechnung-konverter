@@ -128,7 +128,7 @@ export function CustomerMaster() {
       {cfg && info && (
         <section>
           <h2>Import-Einstellungen</h2>
-          <div className="grid">
+          <div className="checks">
             <label className="field checkbox">
               <input
                 type="checkbox"
