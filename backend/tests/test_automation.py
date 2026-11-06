@@ -84,7 +84,7 @@ def test_scanned_pdf_in_inbox_is_ocred(pdf_folders: Folders, invoice: Invoice, m
     invoice.number = "SCAN-1"
     text_version = render_invoice_pdf(invoice)
     monkeypatch.setenv("OCR_URL", "http://ocr:8000")
-    monkeypatch.setattr(ocr, "ocr_pdf", lambda data, filename="": text_version)
+    monkeypatch.setattr(ocr, "ocr_pdf", lambda data, filename="", pages="": text_version)
     (pdf_folders.inbox / "scan-1.pdf").write_bytes(_pdf([]))  # image-like: no text layer
     with _db() as s:
         r = process_pdfs(pdf_folders, "zugferd", s, now=1e12)
@@ -172,7 +172,7 @@ def test_dashboard_counts(client: TestClient) -> None:
 
 def test_pdf_inbox_settings_roundtrip(admin_client: TestClient) -> None:
     settings = admin_client.get("/api/admin/settings").json()
-    assert settings["pdf_inbox"] == {"enabled": True, "profile": "zugferd", "auto_export": True}
+    assert settings["pdf_inbox"] == {"enabled": True, "profile": "zugferd", "auto_export": True, "force_ocr": False}
     settings["pdf_inbox"] = {"enabled": True, "profile": "xrechnung", "auto_export": False}
     assert admin_client.put("/api/admin/settings", json=settings).status_code == 200
     assert admin_client.get("/api/admin/settings").json()["pdf_inbox"]["auto_export"] is False

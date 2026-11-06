@@ -152,6 +152,7 @@ export interface PdfInboxSettings {
   enabled: boolean;
   profile: Profile;
   auto_export: boolean;
+  force_ocr: boolean;
 }
 
 export interface CustomerImportSettings {

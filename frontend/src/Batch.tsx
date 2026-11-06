@@ -12,6 +12,7 @@ export interface Loaded {
   notes: string[];
   templateName: string;
   companyId: string; // own company the invoice belongs to (field links are stored per company)
+  forcedOcr?: boolean; // text recognition was forced for every page
   reviewId?: number; // opened from "Zu prüfen": exporting marks it done
   reviewProfile?: Profile;
 }
@@ -28,7 +29,7 @@ export interface BatchItem {
   message?: string;
 }
 
-export async function loadFile(file: File, companyId = ""): Promise<Loaded> {
+export async function loadFile(file: File, companyId = "", forceOcr = false): Promise<Loaded> {
   if (isIdoc(file)) {
     const r = await importIdoc(file);
     return {
@@ -42,7 +43,7 @@ export async function loadFile(file: File, companyId = ""): Promise<Loaded> {
       companyId: r.company_id,
     };
   }
-  const r = await extractPdf(file, companyId);
+  const r = await extractPdf(file, companyId, forceOcr);
   return {
     file,
     kind: "pdf",
@@ -52,6 +53,7 @@ export async function loadFile(file: File, companyId = ""): Promise<Loaded> {
     notes: r.notes,
     templateName: r.template_name,
     companyId: r.company_id,
+    forcedOcr: forceOcr,
   };
 }
 

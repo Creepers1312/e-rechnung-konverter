@@ -3,8 +3,11 @@
 Runs OCRmyPDF/Tesseract in its own container on the internal Docker network
 (no internet access), so invoices never leave the server.
 
-    POST /ocr     multipart "file" -> application/pdf (pages that already
-                  contain text are passed through unchanged)
+    POST /ocr     multipart "file" -> application/pdf
+                  optional form field "pages": "all" or "1,3" -> these pages are
+                  recognised even if they already carry a (poor) text layer, e.g.
+                  from the scanner; without it, pages that already contain text
+                  are passed through unchanged
     GET  /health  {"status": "ok", "languages": [...]}
 
 Settings (environment):
@@ -17,13 +20,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import threading
 from pathlib import Path
 
 import ocrmypdf
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -57,8 +61,19 @@ def health() -> dict[str, object]:
     return {"status": "ok", "languages": langs}
 
 
+def _mode(pages: str) -> dict[str, object]:
+    """Default: pages with text stay untouched. Requested pages are recognised anyway
+    (their old text layer is replaced; with force_ocr the page is rasterised)."""
+    if not pages:
+        return {"skip_text": True}
+    return {"force_ocr": True} if pages == "all" else {"force_ocr": True, "pages": pages}
+
+
 @app.post("/ocr")
-def ocr(file: UploadFile = File(...)) -> Response:  # sync: runs in FastAPI's thread pool
+def ocr(file: UploadFile = File(...), pages: str = Form("")) -> Response:  # sync: runs in FastAPI's thread pool
+    pages = pages.strip().lower()
+    if pages and pages != "all" and not re.fullmatch(r"\d{1,4}(?:,\d{1,4})*", pages):
+        raise HTTPException(400, "Ungültige Seitenangabe (z. B. „1,3“ oder „all“).")
     data = file.file.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
         raise HTTPException(413, "Datei ist größer als 25 MB.")
@@ -72,7 +87,7 @@ def ocr(file: UploadFile = File(...)) -> Response:  # sync: runs in FastAPI's th
                 src,
                 dst,
                 language=LANG,
-                skip_text=True,  # pages with real text stay untouched
+                **_mode(pages),
                 rotate_pages=True,  # scans fed in upside down / sideways
                 deskew=True,  # slightly skewed scans
                 output_type="pdf",
@@ -88,5 +103,5 @@ def ocr(file: UploadFile = File(...)) -> Response:  # sync: runs in FastAPI's th
             log.warning("ocr failed: %s", exc)
             raise HTTPException(500, f"Texterkennung fehlgeschlagen: {type(exc).__name__}") from exc
         result = dst.read_bytes()
-    log.info("ocr ok: %s (%d -> %d bytes)", file.filename, len(data), len(result))
+    log.info("ocr ok: %s pages=%s (%d -> %d bytes)", file.filename, pages or "auto", len(data), len(result))
     return Response(result, media_type="application/pdf")

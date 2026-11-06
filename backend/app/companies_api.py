@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -52,14 +52,16 @@ def companies(_: User = Depends(current_user), session: Session = Depends(get_se
 
 
 @router.post("/pdf/words", response_model=PdfWords)
-async def pdf_words(file: UploadFile = File(...), _: User = Depends(current_user)) -> PdfWords:
+async def pdf_words(
+    file: UploadFile = File(...), force_ocr: bool = Form(False), _: User = Depends(current_user)
+) -> PdfWords:
     """Words with positions of an uploaded PDF (scans via OCR) for click-to-link in the preview."""
     data = await file.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
         raise HTTPException(413, "Datei zu groß.")
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "Keine PDF-Datei.")
-    pdf, problem = text_of_pdf(data, file.filename or "scan.pdf")
+    pdf, problem = text_of_pdf(data, file.filename or "scan.pdf", force=force_ocr)
     pages = [PageOut.model_validate(p, from_attributes=True) for p in pdf.pages()]
     if not any(p.words for p in pages) and not problem:
         problem = "Im PDF wurde kein Text gefunden."
