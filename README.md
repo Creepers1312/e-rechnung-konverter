@@ -43,6 +43,9 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
   E-Rechnungs-Adresse oder Leitweg-ID, werden sie automatisch ergänzt – auch beim
   SAP-Worker. Vorhandene Werte werden nie überschrieben. Manuelle Suche über
   „Aus Adressbuch übernehmen“ im Käufer-Bereich.
+- **Kundenstamm aus SAP:** Kundendaten (Anschrift, USt-IdNr., E-Rechnungs-Adresse,
+  Leitweg-ID) kommen täglich als CSV aus SAP und müssen nicht von Hand gepflegt werden –
+  siehe „SAP ECC → Kundenstamm“.
 - **Archiv-Suche:** nach Rechnungsnummer/Käufer, Zeitraum, Format und Quelle; Blättern;
   mehrere Einträge als ZIP herunterladen.
 - **SAP-Eingang (Admin):** Status des Workers, Dateien je Ordner, fehlgeschlagene IDocs
@@ -261,6 +264,26 @@ kein SAP-SDK, kein RFC-Benutzer und kein Netzwerkzugriff auf SAP nötig.
   `backend/app/erp/sap_ecc_idoc.py`. **Bitte mit einem echten IDoc aus eurem
   System abgleichen** (WE02). Kundenspezifische Anpassungen sind bei ECC üblich.
 
+### Kundenstamm (CSV-Export)
+
+Damit Käuferdaten, die nicht auf der Rechnung stehen (E-Rechnungs-Adresse, Leitweg-ID,
+USt-IdNr. …), nicht von Hand gepflegt werden müssen, liest die App den SAP-Kundenstamm ein:
+
+1. In SAP eine **SAP-Query** (SQVI oder SQ01) über `KNA1` (+ `ADRC`/`ADR6` für die E-Mail)
+   anlegen, Felder z. B. `KUNNR, NAME1, NAME2, STRAS, PSTLZ, ORT01, LAND1, STCEG, SMTP_ADDR`
+   und – falls gepflegt – das Feld mit der Leitweg-ID.
+2. Ausgabe als Datei (CSV, `;`-getrennt) und als **täglichen Job** (SM36) einplanen; die Datei
+   landet im Ordner `data/stammdaten/inbox` (Netzlaufwerk/Dateiübertragung).
+3. Der Worker importiert jede neue Datei automatisch (danach `processed/`, unlesbare in `error/`).
+   Kunden werden über die **Kundennummer** zugeordnet (führende Nullen egal).
+
+Die Spaltennamen werden automatisch erkannt (technische Namen wie `KUNNR` oder deutsche
+Überschriften wie „Kundennummer“, Kodierung UTF-8 oder Windows-1252, auch SAP-Listenausgabe
+mit `|`). Unter **Verwaltung → Kundenstamm (SAP)** sieht man den letzten Import, kann eine
+Datei von Hand hochladen, die Spaltenzuordnung anpassen und Kunden **ohne
+E-Rechnungs-Adresse** finden. Standardmäßig haben die **SAP-Stammdaten Vorrang** vor dem, was
+aus einem PDF/Scan gelesen wurde (abschaltbar); Exporte überschreiben SAP-Kunden nicht.
+
 Ein späterer Wechsel auf S/4HANA bedeutet nur einen neuen Adapter, der dieselbe
 Schnittstelle (`backend/app/erp/base.py`) erfüllt. Der Rest bleibt unverändert.
 
@@ -281,6 +304,7 @@ backend/
   app/admin.py              Endpunkte für Anmeldung und Verwaltung (/api/auth, /api/admin)
   app/settings.py           Einstellungen aus der Datenbank (Firmendaten, SAP-Konnektor)
   app/customers.py          Käufer-Adressbuch (merken, ergänzen, suchen)
+  app/customer_import.py    SAP-Kundenstamm (CSV) ins Adressbuch importieren
   app/ocr.py                Anbindung des OCR-Dienstes (Scans ohne Textebene)
   app/review.py             Prüfliste „Zu prüfen“
   app/worker.py             SAP-IDoc- und PDF-Eingang -> E-Rechnungen oder Prüfliste

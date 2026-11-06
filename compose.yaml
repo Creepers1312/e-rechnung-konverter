@@ -56,10 +56,12 @@ services:
       SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-12}
       IDOC_DIR: /data/idoc
       PDF_DIR: /data/pdf
+      STAMMDATEN_DIR: /data/stammdaten
     volumes:
       - ./backend/config:/app/config:ro  # company.yaml (own master data)
       - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # admin status page + "retry failed file"
       - ${PDF_HOST_DIR:-./data/pdf}:/data/pdf
+      - ${STAMMDATEN_HOST_DIR:-./data/stammdaten}:/data/stammdaten
     depends_on:
       db:
         condition: service_healthy
@@ -73,12 +75,14 @@ services:
       <<: *backend-env
       IDOC_DIR: /data/idoc
       PDF_DIR: /data/pdf
+      STAMMDATEN_DIR: /data/stammdaten
       IDOC_PROFILE: ${IDOC_PROFILE:-zugferd}
       IDOC_INTERVAL: ${IDOC_INTERVAL:-10}
     volumes:
       - ./backend/config:/app/config:ro
       - ${IDOC_HOST_DIR:-./data/idoc}:/data/idoc  # SAP writes into <dir>/inbox
       - ${PDF_HOST_DIR:-./data/pdf}:/data/pdf  # scanner / file share writes PDFs into <dir>/inbox
+      - ${STAMMDATEN_HOST_DIR:-./data/stammdaten}:/data/stammdaten  # SAP customer master CSV into <dir>/inbox
     healthcheck:  # healthy = a polling round finished within the last 60 s
       test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-heartbeat') > 60)"]
       interval: 15s

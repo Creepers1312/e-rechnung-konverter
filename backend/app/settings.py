@@ -6,6 +6,7 @@
              Falls back to the IDOC_* environment variables. The interval is
              also used for the PDF inbox (one worker loop).
 - "pdf_inbox": PDF inbox folder (on/off, output format, fully automatic export).
+- "customer_import": SAP customer master import (on/off, SAP data wins, CSV column mapping).
 """
 
 from __future__ import annotations
@@ -53,3 +54,16 @@ class PdfInboxSettings(BaseModel):
 def get_pdf_inbox_settings(session: Session) -> PdfInboxSettings:
     stored = get_setting(session, "pdf_inbox")
     return PdfInboxSettings.model_validate(stored) if stored else PdfInboxSettings()
+
+
+class CustomerImportSettings(BaseModel):
+    enabled: bool = True
+    # True: buyer data from the SAP customer master replaces what was read from the PDF (OCR can misread)
+    master_wins: bool = True
+    # target field -> CSV column header; empty/missing = detect automatically (see customer_import.FIELDS)
+    mapping: dict[str, str] = Field(default_factory=dict)
+
+
+def get_customer_import_settings(session: Session) -> CustomerImportSettings:
+    stored = get_setting(session, "customer_import")
+    return CustomerImportSettings.model_validate(stored) if stored else CustomerImportSettings()

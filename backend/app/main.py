@@ -134,8 +134,8 @@ class CustomerInfo(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _filled_note(labels: list[str]) -> list[str]:
-    return [f"Aus dem Käufer-Adressbuch ergänzt: {', '.join(labels)}."] if labels else []
+def _filled_note(result: customers.FillResult) -> list[str]:
+    return customers.note(result)
 
 
 async def _read(upload: UploadFile) -> bytes:

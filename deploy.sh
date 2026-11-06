@@ -229,12 +229,14 @@ else
   # Ordner für SAP-IDocs und Backups; die Container laufen als UID 10001 bzw. root
   idoc=$(env_get IDOC_HOST_DIR); idoc=${idoc:-./data/idoc}
   pdfdir=$(env_get PDF_HOST_DIR); pdfdir=${pdfdir:-./data/pdf}
+  stamm=$(env_get STAMMDATEN_HOST_DIR); stamm=${stamm:-./data/stammdaten}
   backups=$(env_get BACKUP_HOST_DIR); backups=${backups:-./backups}
-  mkdir -p "$idoc"/{inbox,outbox,processed,error} "$pdfdir"/{inbox,outbox,processed,error} "$backups"
-  $SUDO chown -R 10001 "$idoc" "$pdfdir"
+  mkdir -p "$idoc"/{inbox,outbox,processed,error} "$pdfdir"/{inbox,outbox,processed,error} \
+    "$stamm"/{inbox,outbox,processed,error} "$backups"
+  $SUDO chown -R 10001 "$idoc" "$pdfdir" "$stamm"
   chmod 700 "$backups"
   ok ".env angelegt (Passwörter zufällig erzeugt, Datei nur für den Besitzer lesbar)"
-  ok "Ordner: IDocs in $idoc, PDFs in $pdfdir, Sicherungen in $backups"
+  ok "Ordner: IDocs in $idoc, PDFs in $pdfdir, Kundenstamm in $stamm, Sicherungen in $backups"
   trap - EXIT  # .env is complete from here on
 fi
 
@@ -253,6 +255,12 @@ if [ -z "$pdfdir" ]; then env_set PDF_HOST_DIR ./data/pdf; pdfdir=./data/pdf; fi
 if [ ! -d "$pdfdir/inbox" ]; then
   mkdir -p "$pdfdir"/{inbox,outbox,processed,error} && $SUDO chown -R 10001 "$pdfdir"
   ok "PDF-Eingang angelegt: $pdfdir/inbox"
+fi
+stamm=$(env_get STAMMDATEN_HOST_DIR)
+if [ -z "$stamm" ]; then env_set STAMMDATEN_HOST_DIR ./data/stammdaten; stamm=./data/stammdaten; fi
+if [ ! -d "$stamm/inbox" ]; then
+  mkdir -p "$stamm"/{inbox,outbox,processed,error} && $SUDO chown -R 10001 "$stamm"
+  ok "Kundenstamm-Eingang angelegt: $stamm/inbox"
 fi
 
 MODE_NOW=$(env_get COMPOSE_FILE)
@@ -332,6 +340,7 @@ esac
 echo
 echo "  SAP-IDocs:    $(env_get IDOC_HOST_DIR)/inbox"
 echo "  PDF-Eingang:  $(env_get PDF_HOST_DIR)/inbox   (Scanner/Netzlaufwerk hier ablegen lassen)"
+echo "  Kundenstamm:  $(env_get STAMMDATEN_HOST_DIR)/inbox   (CSV-Export der SAP-Query, täglich)"
 echo "  Sicherungen:  $(env_get BACKUP_HOST_DIR) (täglich $(env_get BACKUP_TIME) UTC, $(env_get BACKUP_KEEP_DAYS) Tage)"
 echo "  Update:       ./deploy.sh"
 echo "  Status/Logs:  docker compose ps   ·   docker compose logs -f backend worker"

@@ -111,7 +111,7 @@ class AuditEntry(Base):
 
 
 class Customer(Base):
-    """Buyer address book, filled automatically from exported invoices."""
+    """Buyer address book: imported from the SAP customer master and learned from exported invoices."""
 
     __tablename__ = "customers"
 
@@ -122,6 +122,9 @@ class Customer(Base):
     buyer_reference: Mapped[str] = mapped_column(String(100), default="")  # last used Leitweg-ID
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
     updated_by: Mapped[str] = mapped_column(String(100), default="")
+    # "rechnung": learned from exported invoices; "sap": imported from the SAP customer master (authoritative)
+    source: Mapped[str] = mapped_column(String(20), default="rechnung")
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ReviewItem(Base):
@@ -178,6 +181,11 @@ def _upgrade(conn: Connection) -> None:
     columns = {c["name"] for c in inspect(conn).get_columns("documents")}
     if "created_by" not in columns:
         conn.execute(text("ALTER TABLE documents ADD COLUMN created_by VARCHAR(100) NOT NULL DEFAULT ''"))
+    columns = {c["name"] for c in inspect(conn).get_columns("customers")}
+    if "source" not in columns:
+        conn.execute(text("ALTER TABLE customers ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'rechnung'"))
+    if "synced_at" not in columns:
+        conn.execute(text("ALTER TABLE customers ADD COLUMN synced_at TIMESTAMP WITH TIME ZONE"))
 
 
 def get_session() -> Iterator[Session]:

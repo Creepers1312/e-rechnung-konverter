@@ -1,3 +1,4 @@
+import { CustomerMaster } from "./CustomerMaster";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -22,7 +23,7 @@ function fmt(date: string | null): string {
   return date ? new Date(date).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–";
 }
 
-type Tab = "users" | "idoc" | "settings" | "audit";
+type Tab = "users" | "idoc" | "kunden" | "settings" | "audit";
 
 export function Admin({ me }: { me: CurrentUser }) {
   const [tab, setTab] = useState<Tab>("users");
@@ -32,6 +33,7 @@ export function Admin({ me }: { me: CurrentUser }) {
         {([
           ["users", "Benutzer"],
           ["idoc", "Eingänge & Automatik"],
+          ["kunden", "Kundenstamm (SAP)"],
           ["settings", "Einstellungen & Konnektoren"],
           ["audit", "Protokoll"],
         ] as [Tab, string][]).map(
@@ -44,6 +46,7 @@ export function Admin({ me }: { me: CurrentUser }) {
       </nav>
       {tab === "users" && <Users me={me} />}
       {tab === "idoc" && <InboxPanel />}
+      {tab === "kunden" && <CustomerMaster />}
       {tab === "settings" && <SettingsPanel />}
       {tab === "audit" && <Audit />}
     </div>
@@ -308,6 +311,7 @@ const ACTIONS: Record<string, string> = {
   settings_changed: "Einstellungen geändert",
   idoc_retry: "Datei erneut eingereiht",
   review_discarded: "Prüfeintrag verworfen",
+  customers_imported: "Kundenstamm importiert",
 };
 
 function Audit() {

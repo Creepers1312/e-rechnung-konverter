@@ -10,17 +10,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import auth
+from . import auth, customer_import
 from .auth import Role, current_session, require_admin
 from .company import Company
-from .db import AuditEntry, LoginSession, User, audit, get_session, get_setting, put_setting
-from .settings import IdocSettings, PdfInboxSettings, get_company, get_idoc_settings, get_pdf_inbox_settings
-from .worker import STATUS_KEY
+from .db import AuditEntry, Customer, LoginSession, User, audit, get_session, get_setting, put_setting
+from .model import Party
+from .settings import (
+    CustomerImportSettings,
+    IdocSettings,
+    PdfInboxSettings,
+    get_company,
+    get_customer_import_settings,
+    get_idoc_settings,
+    get_pdf_inbox_settings,
+)
+from .worker import IMPORT_STATUS_KEY, STATUS_KEY
 
 router = APIRouter(prefix="/api")
 
@@ -65,6 +74,7 @@ class Settings(BaseModel):
     company: Company
     idoc: IdocSettings
     pdf_inbox: PdfInboxSettings = Field(default_factory=PdfInboxSettings)
+    customer_import: CustomerImportSettings = Field(default_factory=CustomerImportSettings)
 
 
 class AuditInfo(BaseModel):
@@ -184,7 +194,10 @@ def update_user(
 @router.get("/admin/settings", response_model=Settings)
 def read_settings(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> Settings:
     return Settings(
-        company=get_company(session), idoc=get_idoc_settings(session), pdf_inbox=get_pdf_inbox_settings(session)
+        company=get_company(session),
+        idoc=get_idoc_settings(session),
+        pdf_inbox=get_pdf_inbox_settings(session),
+        customer_import=get_customer_import_settings(session),
     )
 
 
@@ -195,6 +208,7 @@ def write_settings(
     put_setting(session, "company", body.company.model_dump(mode="json"), admin.username)
     put_setting(session, "idoc", body.idoc.model_dump(mode="json"), admin.username)
     put_setting(session, "pdf_inbox", body.pdf_inbox.model_dump(mode="json"), admin.username)
+    put_setting(session, "customer_import", body.customer_import.model_dump(mode="json"), admin.username)
     audit(
         session,
         admin.username,
@@ -225,6 +239,7 @@ def read_audit(
         "settings_changed",
         "idoc_retry",
         "review_discarded",
+        "customers_imported",
     ]
     | None = None,
     _: User = Depends(require_admin),
@@ -238,10 +253,11 @@ def read_audit(
 
 # --- inbox status: SAP IDocs + PDFs (admin) -----------------------------------
 
-InboxKind = Literal["idoc", "pdf"]
+InboxKind = Literal["idoc", "pdf", "stammdaten"]
 INBOXES: dict[str, tuple[str, str, str]] = {  # kind -> (label, env var, default dir)
     "idoc": ("SAP-IDocs", "IDOC_DIR", "./data/idoc"),
     "pdf": ("PDF-Rechnungen", "PDF_DIR", "./data/pdf"),
+    "stammdaten": ("SAP-Kundenstamm (CSV)", "STAMMDATEN_DIR", "./data/stammdaten"),
 }
 
 
@@ -341,3 +357,106 @@ def inbox_retry(
     audit(session, admin.username, "idoc_retry", file=body.name, inbox=body.kind)
     session.commit()
     return Response(status_code=204)
+
+
+# --- SAP customer master / address book (admin) ---------------------------------
+
+
+class CustomerRow(BaseModel):
+    id: int
+    erp_id: str
+    name: str
+    city: str
+    country: str
+    vat_id: str
+    electronic_address: str
+    buyer_reference: str
+    source: str
+    synced_at: datetime | None
+    updated_at: datetime
+
+
+class CustomerPage(BaseModel):
+    items: list[CustomerRow]
+    total: int
+    missing_einvoice: int  # SAP customers without e-invoice address
+
+
+class CustomerImportInfo(BaseModel):
+    last: customer_import.ImportReport | None
+    fields: list[dict[str, str]]  # [{key, label}] for the mapping editor
+
+
+def _row(c: Customer) -> CustomerRow:
+    p = Party.model_validate(c.party)
+    return CustomerRow(
+        id=c.id,
+        erp_id=p.erp_id,
+        name=c.name,
+        city=p.address.city,
+        country=p.address.country_code,
+        vat_id=p.vat_id,
+        electronic_address=p.electronic_address,
+        buyer_reference=c.buyer_reference,
+        source=c.source,
+        synced_at=c.synced_at,
+        updated_at=c.updated_at,
+    )
+
+
+@router.get("/admin/customers", response_model=CustomerPage)
+def list_customers(
+    q: str = Query("", max_length=100),
+    missing_einvoice: bool = False,
+    source: Literal["sap", "rechnung"] | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    _: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> CustomerPage:
+    """Address book incl. SAP master data; JSON fields are filtered in Python (portable, small tables)."""
+    rows = list(session.scalars(select(Customer).order_by(Customer.name)))
+    term = q.strip().lower()
+    items = [_row(c) for c in rows]
+    missing = sum(1 for r in items if r.source == "sap" and not r.electronic_address)
+    if term:
+        items = [r for r in items if term in r.name.lower() or term in r.erp_id.lower() or term in r.city.lower()]
+    if source:
+        items = [r for r in items if r.source == source]
+    if missing_einvoice:
+        items = [r for r in items if not r.electronic_address]
+    return CustomerPage(items=items[offset : offset + limit], total=len(items), missing_einvoice=missing)
+
+
+@router.get("/admin/customers/import", response_model=CustomerImportInfo)
+def customer_import_info(
+    _: User = Depends(require_admin), session: Session = Depends(get_session)
+) -> CustomerImportInfo:
+    last = get_setting(session, IMPORT_STATUS_KEY)
+    return CustomerImportInfo(
+        last=customer_import.ImportReport.model_validate(last) if last else None,
+        fields=[{"key": k, "label": label} for k, (label, _) in customer_import.FIELDS.items()],
+    )
+
+
+@router.post("/admin/customers/import", response_model=customer_import.ImportReport)
+async def customer_import_upload(
+    file: UploadFile = File(...), admin: User = Depends(require_admin), session: Session = Depends(get_session)
+) -> customer_import.ImportReport:
+    """Import a customer master CSV right away (same as dropping it into the folder)."""
+    data = await file.read(50 * 1024 * 1024 + 1)
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Datei ist größer als 50 MB.")
+    cfg = get_customer_import_settings(session)
+    try:
+        report = customer_import.import_customers(
+            session, data, file.filename or "upload.csv", cfg.mapping, admin.username
+        )
+    except customer_import.ImportError_ as exc:
+        raise HTTPException(400, str(exc)) from exc
+    put_setting(session, IMPORT_STATUS_KEY, report.model_dump(mode="json"), admin.username)
+    audit(
+        session, admin.username, "customers_imported", file=report.file, created=report.created, updated=report.updated
+    )
+    session.commit()
+    return report

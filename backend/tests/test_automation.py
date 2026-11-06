@@ -177,4 +177,4 @@ def test_pdf_inbox_settings_roundtrip(admin_client: TestClient) -> None:
     assert admin_client.put("/api/admin/settings", json=settings).status_code == 200
     assert admin_client.get("/api/admin/settings").json()["pdf_inbox"]["auto_export"] is False
     st = admin_client.get("/api/admin/inbox/status").json()
-    assert {i["kind"] for i in st["inboxes"]} == {"idoc", "pdf"}
+    assert {i["kind"] for i in st["inboxes"]} == {"idoc", "pdf", "stammdaten"}

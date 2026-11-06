@@ -1,10 +1,15 @@
 """Buyer address book.
 
-Every successful export remembers the buyer (keyed by ERP customer number,
-otherwise by name). When a new invoice for the same buyer comes in, empty
-buyer fields are filled from the address book – most importantly the
-e-invoice address and the Leitweg-ID, which PDFs and IDocs usually lack.
-Fields that are already filled are never overwritten.
+Two sources fill it:
+- the SAP customer master (customer_import.py, source "sap") – authoritative;
+- every successful export remembers its buyer (source "rechnung").
+
+When an invoice comes in, the buyer is looked up by customer number (then by
+name) and missing fields are completed – most importantly the e-invoice
+address and the Leitweg-ID, which PDFs and IDocs usually lack. With
+"SAP-Stammdaten haben Vorrang" (default), data from the SAP master also
+replaces values read from the document, since OCR can misread an address.
+Data learned from invoices never overwrites what the document says.
 """
 
 from __future__ import annotations
@@ -55,6 +60,16 @@ def remember(session: Session, invoice: Invoice, username: str) -> None:
     if not keys:
         return
     customer = find(session, buyer)
+    if customer is not None and customer.source == "sap":
+        # the SAP master stays authoritative: only add what it does not know
+        stored = Party.model_validate(customer.party)
+        for path, _ in _FILLABLE:
+            if not str(_get(stored, path)).strip() and str(_get(buyer, path)).strip():
+                _set(stored, path, _get(buyer, path))
+        customer.party = stored.model_dump(mode="json")
+        if not customer.buyer_reference and invoice.buyer_reference:
+            customer.buyer_reference = invoice.buyer_reference[:100]
+        return
     if customer is None:
         customer = Customer(lookup_key=keys[0])
         session.add(customer)
@@ -93,21 +108,47 @@ def _set(obj: object, path: str, value: str) -> None:
     setattr(obj, last, value)
 
 
-def fill(session: Session, invoice: Invoice) -> list[str]:
-    """Fill empty buyer fields from the address book. Returns German labels of what was filled."""
+class FillResult(list):
+    """German labels of the buyer fields that were filled or corrected; `.source` = "sap" | "rechnung" | ""."""
+
+    source: str = ""
+
+
+def fill(session: Session, invoice: Invoice, master_wins: bool | None = None) -> FillResult:
+    """Complete the buyer from the address book. Returns the labels of what changed."""
+    result = FillResult()
     customer = find(session, invoice.buyer)
     if customer is None:
-        return []
+        return result
+    result.source = customer.source
+    if master_wins is None:
+        from .settings import get_customer_import_settings  # late import: settings -> db -> ...
+
+        master_wins = get_customer_import_settings(session).master_wins
+    overwrite = master_wins and customer.source == "sap"
     stored = Party.model_validate(customer.party)
-    filled: list[str] = []
     for path, label in _FILLABLE:
-        if not str(_get(invoice.buyer, path)).strip() and str(_get(stored, path)).strip():
-            _set(invoice.buyer, path, _get(stored, path))
-            filled.append(label)
-    if not invoice.buyer_reference.strip() and customer.buyer_reference:
+        new = str(_get(stored, path)).strip()
+        old = str(_get(invoice.buyer, path)).strip()
+        if new and (not old or (overwrite and old != new and path != "erp_id")):
+            _set(invoice.buyer, path, new)
+            result.append(label)
+    if overwrite and stored.address.country_code and invoice.buyer.address.country_code != stored.address.country_code:
+        invoice.buyer.address.country_code = stored.address.country_code
+        result.append("Land")
+    replace_ref = not invoice.buyer_reference.strip() or overwrite
+    if customer.buyer_reference and replace_ref and invoice.buyer_reference != customer.buyer_reference:
         invoice.buyer_reference = customer.buyer_reference
-        filled.append("Leitweg-ID / Käuferreferenz")
-    return filled
+        result.append("Leitweg-ID / Käuferreferenz")
+    return result
+
+
+def note(result: FillResult) -> list[str]:
+    """Hint for the user, e.g. ["Aus dem SAP-Kundenstamm übernommen: Name, Straße."]."""
+    if not result:
+        return []
+    origin = "dem SAP-Kundenstamm übernommen" if result.source == "sap" else "dem Käufer-Adressbuch ergänzt"
+    return [f"Aus {origin}: {', '.join(result)}."]
 
 
 def search(session: Session, query: str, limit: int = 10) -> list[Customer]:

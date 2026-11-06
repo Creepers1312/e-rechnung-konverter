@@ -34,7 +34,7 @@ comments and identifiers are English.
    published port), backend, worker (same image, `python -m app.worker`), db
    (PostgreSQL), backup (`backup/backup.sh`, pg_dump), ocr (`ocr/`, OCRmyPDF).
    Network `data` is internal: worker, db, backup and ocr have no internet. The
-   IDoc and PDF inbox folders are mounted into worker (processing) and backend
+   IDoc, PDF and customer-master (`stammdaten`) inbox folders are mounted into worker (processing) and backend
    (admin status/retry).
    `deploy.sh` installs/updates; overlays in `deploy/` (Caddy HTTPS, existing
    Docker proxy) are selected via `COMPOSE_FILE` in `.env`. Everything is
@@ -51,7 +51,10 @@ comments and identifiers are English.
    header. Security-relevant actions go to the audit log (`db.audit`).
    Admin-editable configuration lives in the `settings` table (`app/settings.py`).
 10. **Buyer address book** (`app/customers.py`): exports remember the buyer;
-    `customers.fill` only fills *empty* fields. Text search must lower-case both
+    `customers.fill` only fills *empty* fields – except entries imported from
+    the SAP customer master (`source = "sap"`, `app/customer_import.py`, CSV
+    keyed by customer number): with `customer_import.master_wins` they override
+    what was read from a PDF, and exports never overwrite them. Text search must lower-case both
     sides – PostgreSQL's LIKE is case-sensitive, SQLite's (used in tests) is not.
 
 11. **Automation first, review second** (`app/worker.py`, `app/review.py`):

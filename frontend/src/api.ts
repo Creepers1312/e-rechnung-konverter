@@ -2,11 +2,14 @@ import type {
   AdminSettings,
   AuditEntry,
   CurrentUser,
+  CustomerImportInfo,
   CustomerInfo,
+  CustomerPage,
   DocumentFilter,
   DocumentPage,
   ExtractionResult,
   Dashboard,
+  ImportReport,
   ImportResult,
   InboxKind,
   InboxStatus,
@@ -238,4 +241,24 @@ export async function getReviewPdf(id: number, name: string): Promise<File> {
 
 export async function discardReview(id: number): Promise<void> {
   await check(await apiFetch(`/api/review/${id}/discard`, { method: "POST" }));
+}
+
+// --- SAP customer master ------------------------------------------------------------
+
+export async function listCustomerMaster(params: { q?: string; missing_einvoice?: boolean; source?: string }): Promise<CustomerPage> {
+  const qs = new URLSearchParams({ limit: "500" });
+  if (params.q) qs.set("q", params.q);
+  if (params.missing_einvoice) qs.set("missing_einvoice", "true");
+  if (params.source) qs.set("source", params.source);
+  return (await check(await apiFetch(`/api/admin/customers?${qs}`))).json();
+}
+
+export async function getCustomerImportInfo(): Promise<CustomerImportInfo> {
+  return (await check(await apiFetch("/api/admin/customers/import"))).json();
+}
+
+export async function importCustomerMaster(file: File): Promise<ImportReport> {
+  const form = new FormData();
+  form.append("file", file);
+  return (await check(await apiFetch("/api/admin/customers/import", { method: "POST", body: form }))).json();
 }
