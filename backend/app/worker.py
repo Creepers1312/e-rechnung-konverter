@@ -9,6 +9,8 @@ Two inbox folders, each with the same layout:
 
 - IDOC_DIR (default ./data/idoc): SAP ECC INVOIC02 IDocs (*.xml)
 - PDF_DIR  (default ./data/pdf):  PDF invoices (*.pdf), scans are OCR'd first
+- STAMMDATEN_DIR (default ./data/stammdaten): SAP customer master exports (*.csv / *.txt)
+  -> buyer address book (customer_import.py); handled before the invoices
 
 Per file: read -> fill buyer gaps from the address book -> validate.
 Valid invoices are converted, archived and written to outbox/. Invoices with
@@ -34,7 +36,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import customers, review
+from . import customer_import, customers, review
 from .convert import NotExportable, convert
 from .db import archive, get_engine, get_setting, put_setting
 from .erp.sap_ecc_idoc import SapEccIdocFolderAdapter
@@ -42,7 +44,7 @@ from .export.cii import Profile
 from .extraction.rules import extract
 from .model import Invoice
 from .ocr import text_of_pdf
-from .settings import get_company, get_idoc_settings, get_pdf_inbox_settings
+from .settings import get_company, get_customer_import_settings, get_idoc_settings, get_pdf_inbox_settings
 from .validation import validate
 
 log = logging.getLogger("erechnung.worker")
@@ -50,6 +52,7 @@ log = logging.getLogger("erechnung.worker")
 # A file younger than this may still be being written.
 MIN_FILE_AGE_SECONDS = 2.0
 STATUS_KEY = "idoc_status"  # historic name: holds the status of both inboxes
+IMPORT_STATUS_KEY = "customer_import_status"  # last customer master import report
 
 
 @dataclass
@@ -145,8 +148,7 @@ def process_idocs(folders: Folders, profile: Profile, session: Session, now: flo
             _fail(folders, path, exc)
             result.failed += 1
             continue
-        filled = customers.fill(session, invoice)
-        notes = [f"Aus dem Käufer-Adressbuch ergänzt: {', '.join(filled)}."] if filled else []
+        notes = customers.note(customers.fill(session, invoice))
         try:
             _finish(session, folders, path, invoice, profile, source="idoc", source_pdf=None, result=result)
         except NotExportable as exc:
@@ -193,8 +195,7 @@ def process_pdfs(
         invoice = extracted.invoice
         warnings = ([ocr_problem] if ocr_problem else []) + extracted.warnings
         notes = list(extracted.notes)
-        if filled := customers.fill(session, invoice):
-            notes.append(f"Aus dem Käufer-Adressbuch ergänzt: {', '.join(filled)}.")
+        notes += customers.note(customers.fill(session, invoice))
         try:
             if not auto_export:
                 errors = [i for i in validate(invoice, profile, extracted.stated_totals) if i.severity == "error"]
@@ -223,6 +224,27 @@ def process_pdfs(
             _move(path, folders.processed)
             result.review += 1
             log.info("review needed %s (%d issues)", path.name, len(exc.issues))
+        except Exception as exc:
+            session.rollback()
+            _fail(folders, path, exc)
+            result.failed += 1
+    return result
+
+
+def process_customer_files(folders: Folders, session: Session, now: float | None = None) -> RoundResult:
+    """SAP customer master CSVs -> address book. The last report is kept for the admin page."""
+    cfg = get_customer_import_settings(session)
+    result = RoundResult()
+    now = time.time() if now is None else now
+    files = [p for suffix in (".csv", ".txt") for p in _ready_files(folders.inbox, suffix, now)]
+    for path in sorted(files, key=lambda p: p.stat().st_mtime):  # oldest first: the newest export wins
+        try:
+            report = customer_import.import_customers(session, path.read_bytes(), path.name, cfg.mapping, "sap-import")
+            put_setting(session, IMPORT_STATUS_KEY, report.model_dump(mode="json"), "worker")
+            session.commit()
+            _move(path, folders.processed)
+            result.converted += 1
+            log.info("customer master %s: %d new, %d updated", path.name, report.created, report.updated)
         except Exception as exc:
             session.rollback()
             _fail(folders, path, exc)
@@ -263,6 +285,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     idoc_folders = Folders.under(Path(os.environ.get("IDOC_DIR", "./data/idoc")))
     pdf_folders = Folders.under(Path(os.environ.get("PDF_DIR", "./data/pdf")))
+    customer_folders = Folders.under(Path(os.environ.get("STAMMDATEN_DIR", "./data/stammdaten")))
     make_session = sessionmaker(get_engine(), expire_on_commit=False)
     heartbeat = Path(os.environ.get("WORKER_HEARTBEAT", "/tmp/worker-heartbeat"))
     log.info("watching %s and %s", idoc_folders.inbox, pdf_folders.inbox)
@@ -287,6 +310,9 @@ def main() -> None:
                     )
                     last = state
                 total = RoundResult()
+                if get_customer_import_settings(session).enabled:
+                    # master data first, so invoices of this round already see new customers
+                    process_customer_files(customer_folders, session)
                 rounds = []
                 if idoc_cfg.enabled:
                     rounds.append(process_idocs(idoc_folders, idoc_cfg.profile, session))

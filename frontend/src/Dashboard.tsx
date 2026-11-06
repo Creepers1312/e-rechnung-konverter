@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getDashboard, listDocuments } from "./api";
+import { DashboardCharts } from "./DashboardCharts";
 import { navigate } from "./router";
 import type { ArchivedDocument, CurrentUser, Dashboard as DashboardData } from "./types";
 import { eur, fmtDateTime } from "./util";
@@ -94,6 +95,8 @@ export function Dashboard({ me, refreshKey }: { me: CurrentUser; refreshKey: num
         <strong>Rechnungen hierher ziehen oder klicken</strong>
         <span>PDF (auch Scans) oder SAP-IDoc · eine Datei zum Prüfen, mehrere als Stapel</span>
       </button>
+
+      <DashboardCharts refreshKey={refreshKey} />
 
       <section className="card">
         <div className="section-head">

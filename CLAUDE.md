@@ -34,7 +34,7 @@ comments and identifiers are English.
    published port), backend, worker (same image, `python -m app.worker`), db
    (PostgreSQL), backup (`backup/backup.sh`, pg_dump), ocr (`ocr/`, OCRmyPDF).
    Network `data` is internal: worker, db, backup and ocr have no internet. The
-   IDoc and PDF inbox folders are mounted into worker (processing) and backend
+   IDoc, PDF and customer-master (`stammdaten`) inbox folders are mounted into worker (processing) and backend
    (admin status/retry).
    `deploy.sh` installs/updates; overlays in `deploy/` (Caddy HTTPS, existing
    Docker proxy) are selected via `COMPOSE_FILE` in `.env`. Everything is
@@ -51,7 +51,10 @@ comments and identifiers are English.
    header. Security-relevant actions go to the audit log (`db.audit`).
    Admin-editable configuration lives in the `settings` table (`app/settings.py`).
 10. **Buyer address book** (`app/customers.py`): exports remember the buyer;
-    `customers.fill` only fills *empty* fields. Text search must lower-case both
+    `customers.fill` only fills *empty* fields – except entries imported from
+    the SAP customer master (`source = "sap"`, `app/customer_import.py`, CSV
+    keyed by customer number): with `customer_import.master_wins` they override
+    what was read from a PDF, and exports never overwrite them. Text search must lower-case both
     sides – PostgreSQL's LIKE is case-sensitive, SQLite's (used in tests) is not.
 
 11. **Automation first, review second** (`app/worker.py`, `app/review.py`):
@@ -63,6 +66,13 @@ comments and identifiers are English.
     its value in templates. Placeholders (`{AMOUNT}`, `{DATE}`, `{NUMBER}`,
     `{SEP}`) are wrapped in groups by the engine. Multi-line items use
     `lines.block_pattern`.
+
+13. **In-app documentation** (`app/docs.py`, `app/handbuch/*.md`): the user
+    manual is for every user, the system documentation only for admins (served
+    by the API, never as static files; `admin-*.png` images are admin-only).
+    Every new `/api` endpoint needs a German entry in `docs.DESCRIPTIONS`
+    (a test enforces it). Screenshots only with invented demo data
+    (`backend/scripts/demo_data.py`, `frontend/scripts/screenshots.mjs`).
 
 ## Commands
 

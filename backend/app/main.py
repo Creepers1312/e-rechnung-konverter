@@ -26,6 +26,7 @@ from .auth import bootstrap_admin, current_user
 from .company import Company
 from .convert import EInvoice, NotExportable, convert
 from .db import Document, ReviewItem, User, archive, audit, get_engine, get_session, get_setting, search_documents
+from .docs import router as docs_router
 from .erp.sap_ecc_idoc import parse_invoic02
 from .export.cii import Profile, build_cii
 from .export.zugferd import check_xsd
@@ -33,6 +34,7 @@ from .extraction.rules import ExtractionResult, extract
 from .model import Invoice, Party, Totals, compute_totals
 from .ocr import text_of_pdf
 from .settings import get_company
+from .stats import router as stats_router
 from .validation import Issue, StatedTotals, validate
 from .worker import STATUS_KEY
 
@@ -49,6 +51,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="E-Rechnung Konverter", version="0.3.0", lifespan=lifespan)
 app.include_router(admin_router)
+app.include_router(stats_router)
+app.include_router(docs_router)
 
 
 class ValidateRequest(BaseModel):
@@ -134,8 +138,8 @@ class CustomerInfo(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _filled_note(labels: list[str]) -> list[str]:
-    return [f"Aus dem Käufer-Adressbuch ergänzt: {', '.join(labels)}."] if labels else []
+def _filled_note(result: customers.FillResult) -> list[str]:
+    return customers.note(result)
 
 
 async def _read(upload: UploadFile) -> bytes:

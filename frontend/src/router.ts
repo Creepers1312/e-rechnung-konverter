@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
 /** Pages of the app; the URL hash keeps the browser's back/forward buttons and bookmarks working. */
-export type Page = "start" | "pruefen" | "umwandeln" | "archiv" | "verwaltung" | "passwort";
-const PAGES: Page[] = ["start", "pruefen", "umwandeln", "archiv", "verwaltung", "passwort"];
+export type Page = "start" | "pruefen" | "umwandeln" | "archiv" | "verwaltung" | "hilfe" | "passwort";
+const PAGES: Page[] = ["start", "pruefen", "umwandeln", "archiv", "verwaltung", "hilfe", "passwort"];
 
 function current(): Page {
   const p = window.location.hash.replace(/^#\/?/, "") as Page;

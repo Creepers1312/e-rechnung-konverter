@@ -150,10 +150,17 @@ export interface PdfInboxSettings {
   auto_export: boolean;
 }
 
+export interface CustomerImportSettings {
+  enabled: boolean;
+  master_wins: boolean;
+  mapping: Record<string, string>;
+}
+
 export interface AdminSettings {
   company: Company;
   idoc: IdocSettings;
   pdf_inbox: PdfInboxSettings;
+  customer_import: CustomerImportSettings;
 }
 
 export interface AuditEntry {
@@ -199,7 +206,7 @@ export interface ErrorFile {
   reason: string;
 }
 
-export type InboxKind = "idoc" | "pdf";
+export type InboxKind = "idoc" | "pdf" | "stammdaten";
 
 export interface InboxInfo {
   kind: InboxKind;
@@ -256,4 +263,64 @@ export interface Dashboard {
   documents_today: number;
   documents_total: number;
   worker: WorkerReport;
+}
+
+export interface CustomerRow {
+  id: number;
+  erp_id: string;
+  name: string;
+  city: string;
+  country: string;
+  vat_id: string;
+  electronic_address: string;
+  buyer_reference: string;
+  source: "sap" | "rechnung";
+  synced_at: string | null;
+  updated_at: string;
+}
+
+export interface CustomerPage {
+  items: CustomerRow[];
+  total: number;
+  missing_einvoice: number;
+}
+
+export interface ImportReport {
+  file: string;
+  at: string;
+  rows: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  missing_einvoice: number;
+  mapping: Record<string, string>;
+  unmapped_columns: string[];
+  warnings: string[];
+}
+
+export interface CustomerImportInfo {
+  last: ImportReport | null;
+  fields: { key: string; label: string }[];
+}
+
+export interface DashboardStats {
+  days: number;
+  currency: string;
+  daily: { date: string; automatic: number; manual: number }[];
+  monthly: { month: string; count: number; volume: string }[];
+  this_month: { count: number; volume: string };
+  last_month: { count: number; volume: string };
+  last_month_to_date: { count: number; volume: string };
+  automation_rate: number | null;
+  by_profile: Record<string, number>;
+  by_source: Record<string, number>;
+  top_buyers: { name: string; count: number; volume: string }[];
+  review: { open: number; resolved: number; discarded: number; avg_hours_to_resolve: number | null };
+}
+
+export interface DocEndpoint {
+  method: string;
+  path: string;
+  access: string;
+  summary: string;
 }

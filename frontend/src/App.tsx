@@ -3,6 +3,7 @@ import { Admin } from "./Admin";
 import { UNAUTHORIZED_EVENT, getDashboard, getMe, logout } from "./api";
 import { Archive } from "./Archive";
 import { Dashboard } from "./Dashboard";
+import { Help } from "./Help";
 import { ChangePassword, Login } from "./Login";
 import { Review } from "./Review";
 import { Toaster } from "./toast";
@@ -16,6 +17,7 @@ const NAV: { page: Page; label: string; icon: string; admin?: boolean }[] = [
   { page: "umwandeln", label: "Umwandeln", icon: "⇄" },
   { page: "archiv", label: "Archiv", icon: "▤" },
   { page: "verwaltung", label: "Verwaltung", icon: "⚙", admin: true },
+  { page: "hilfe", label: "Hilfe", icon: "?" },
 ];
 
 /** Shell: login gate, forced password change, sidebar navigation by role. */
@@ -123,6 +125,11 @@ export function App() {
         {current === "verwaltung" && isAdmin && (
           <div className="page">
             <Admin me={user} />
+          </div>
+        )}
+        {current === "hilfe" && (
+          <div className="page">
+            <Help me={user} />
           </div>
         )}
         {current === "passwort" && (
