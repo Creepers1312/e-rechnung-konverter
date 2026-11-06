@@ -69,9 +69,10 @@ function upload(file: File): FormData {
   return form;
 }
 
-export async function extractPdf(file: File, companyId = ""): Promise<ExtractionResult> {
+export async function extractPdf(file: File, companyId = "", forceOcr = false): Promise<ExtractionResult> {
   const body = upload(file);
   if (companyId) body.append("company_id", companyId);
+  if (forceOcr) body.append("force_ocr", "true");
   const res = await check(await apiFetch("/api/extract", { method: "POST", body }));
   return res.json();
 }
@@ -287,8 +288,10 @@ export async function listCompanies(): Promise<Company[]> {
   return (await check(await apiFetch("/api/companies"))).json();
 }
 
-export async function getPdfWords(file: File): Promise<PdfWords> {
-  return (await check(await apiFetch("/api/pdf/words", { method: "POST", body: upload(file) }))).json();
+export async function getPdfWords(file: File, forceOcr = false): Promise<PdfWords> {
+  const body = upload(file);
+  if (forceOcr) body.append("force_ocr", "true");
+  return (await check(await apiFetch("/api/pdf/words", { method: "POST", body }))).json();
 }
 
 export async function listFieldLinks(companyId: string): Promise<FieldLink[]> {

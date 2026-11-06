@@ -175,7 +175,13 @@ def process_idocs(folders: Folders, profile: Profile, session: Session, now: flo
 
 
 def process_pdfs(
-    folders: Folders, profile: Profile, session: Session, *, auto_export: bool = True, now: float | None = None
+    folders: Folders,
+    profile: Profile,
+    session: Session,
+    *,
+    auto_export: bool = True,
+    force_ocr: bool = False,
+    now: float | None = None,
 ) -> RoundResult:
     """PDF inbox: OCR (scans) -> recognition -> address book -> validate -> convert or review queue."""
     result = RoundResult()
@@ -184,7 +190,7 @@ def process_pdfs(
             data = path.read_bytes()
             if not data.startswith(b"%PDF"):
                 raise ValueError("Keine PDF-Datei.")
-            pdf, ocr_problem = text_of_pdf(data, path.name)
+            pdf, ocr_problem = text_of_pdf(data, path.name, force=force_ocr)
             extracted = recognize_pdf(session, pdf)
         except Exception as exc:
             session.rollback()
@@ -316,7 +322,15 @@ def main() -> None:
                 if idoc_cfg.enabled:
                     rounds.append(process_idocs(idoc_folders, idoc_cfg.profile, session))
                 if pdf_cfg.enabled:
-                    rounds.append(process_pdfs(pdf_folders, pdf_cfg.profile, session, auto_export=pdf_cfg.auto_export))
+                    rounds.append(
+                        process_pdfs(
+                            pdf_folders,
+                            pdf_cfg.profile,
+                            session,
+                            auto_export=pdf_cfg.auto_export,
+                            force_ocr=pdf_cfg.force_ocr,
+                        )
+                    )
                 for r in rounds:
                     total.converted += r.converted
                     total.review += r.review

@@ -218,13 +218,14 @@ def company(
 async def extract_pdf(
     file: UploadFile = File(...),
     company_id: str = Form(""),
+    force_ocr: bool = Form(False),
     _: User = Depends(current_user),
     session: Session = Depends(get_session),
 ) -> ExtractionResult:
     data = await _read(file)
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "Keine PDF-Datei.")
-    pdf, ocr_problem = text_of_pdf(data, file.filename or "scan.pdf")
+    pdf, ocr_problem = text_of_pdf(data, file.filename or "scan.pdf", force=force_ocr)
     result = recognize_pdf(session, pdf, company_id or None)
     if ocr_problem:
         result.warnings.insert(0, ocr_problem)

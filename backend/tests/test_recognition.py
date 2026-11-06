@@ -140,7 +140,7 @@ def test_extract_endpoint_runs_ocr_for_scans(client, monkeypatch) -> None:  # no
     text_pdf = _pdf(["Rheinfelden Carbon Products GmbH"] + SAP_HEADER + SAP_ITEM)
     calls = []
     monkeypatch.setenv("OCR_URL", "http://ocr:8000")
-    monkeypatch.setattr(ocr, "ocr_pdf", lambda data, filename="": calls.append(filename) or text_pdf)
+    monkeypatch.setattr(ocr, "ocr_pdf", lambda data, filename="", pages="": calls.append(filename) or text_pdf)
 
     r = client.post("/api/extract", files={"file": ("scan.pdf", _pdf([]), "application/pdf")})
     assert r.status_code == 200, r.text

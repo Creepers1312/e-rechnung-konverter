@@ -63,7 +63,8 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 
 **Gut zu wissen**
 
-- **Gescannte PDFs** (ohne Text) werden automatisch per Texterkennung gelesen. Prüfen Sie hier Zahlen und Namen besonders genau.
+- **Gescannte PDFs** werden automatisch per Texterkennung gelesen – Seite für Seite, auch wenn der Scanner einen Stempel oder eine eigene (schlechte) Textebene eingefügt hat. Prüfen Sie hier Zahlen und Namen besonders genau.
+- **Text falsch oder gar nicht gelesen?** Oben auf **„Texterkennung erzwingen“** klicken: Das PDF wird komplett neu per Texterkennung gelesen (Änderungen im Formular gehen dabei verloren).
 - **Summen** rechnet die App immer selbst nach. Weichen sie von den Beträgen auf dem PDF ab, erscheint eine Warnung.
 - **Käuferdaten** wie E-Rechnungs-Adresse oder Leitweg-ID werden aus dem Kundenstamm (SAP) bzw. aus früheren Rechnungen ergänzt. Unter „Käufer“ können Sie über **„Aus Adressbuch übernehmen“** auch selbst suchen.
 - **Preis je 100 kg / 1000 kg:** Steht der Preis pro 100 oder 1000 Einheiten auf der Rechnung, trägt die App das in der Spalte **„je“** der Positionen ein und rechnet den Positionsbetrag entsprechend.

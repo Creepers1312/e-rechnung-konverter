@@ -260,6 +260,14 @@ function SettingsPanel() {
             />
             <span>Vollautomatisch: fehlerfreie Rechnungen ohne Freigabe erzeugen</span>
           </label>
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={settings.pdf_inbox.force_ocr}
+              onChange={(e) => update("pdf_inbox.force_ocr", e.target.checked)}
+            />
+            <span>Jede Seite per Texterkennung lesen (für Scanner, deren eigene Textebene schlecht ist)</span>
+          </label>
           <label className="field">
             <span>Ausgabeformat</span>
             <select value={settings.pdf_inbox.profile} onChange={(e) => update("pdf_inbox.profile", e.target.value)}>

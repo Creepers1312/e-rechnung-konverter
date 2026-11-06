@@ -129,6 +129,8 @@ class PdfInboxSettings(BaseModel):
     profile: Literal["zugferd", "xrechnung"] = "zugferd"
     # True: invoices without errors are converted right away; False: every PDF goes to "Zu prüfen"
     auto_export: bool = True
+    # True: every PDF goes through text recognition (scanner inbox whose own text layer is poor)
+    force_ocr: bool = False
 
 
 def get_pdf_inbox_settings(session: Session) -> PdfInboxSettings:

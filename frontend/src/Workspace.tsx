@@ -144,6 +144,23 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
       .catch((err) => setErrors(describe(err)));
   }
 
+  /** Read the PDF again with text recognition on every page (scanner text layer was poor). */
+  async function forceOcr() {
+    if (!loaded || loaded.kind !== "pdf") return;
+    if (!window.confirm("PDF komplett neu per Texterkennung lesen? Ungespeicherte Änderungen im Formular gehen verloren.")) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const fresh = await loadFile(loaded.file, loaded.companyId, true);
+      open({ ...fresh, reviewId: loaded.reviewId, reviewProfile: loaded.reviewProfile }, openBatchId);
+      showToast("Neu per Texterkennung gelesen.");
+    } catch (e) {
+      setErrors(describe(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Another own company chosen in the editor: re-read a fresh PDF with its links, else swap the seller. */
   async function switchCompany(id: string) {
     if (!loaded || !invoice) return;
@@ -463,6 +480,16 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
                   {preview ? "PDF ausblenden" : "PDF anzeigen"}
                 </button>
               )}
+              {loaded.kind === "pdf" && loaded.file.size > 0 && (
+                <button
+                  className="secondary"
+                  onClick={() => void forceOcr()}
+                  disabled={busy}
+                  title="Wenn Text falsch oder gar nicht gelesen wurde: jede Seite neu per Texterkennung (OCR) lesen"
+                >
+                  {busy ? "Lese …" : "Texterkennung erzwingen"}
+                </button>
+              )}
               <button className="secondary" onClick={() => fileInput.current?.click()} disabled={batchRunning}>
                 Andere Datei
               </button>
@@ -490,6 +517,7 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
                 onSelect={setSelection}
                 links={links}
                 companyName={companyName}
+                forceOcr={loaded.forcedOcr}
               />
             )}
             <div className={`editor-form${linkMode && selection ? " link-armed" : ""}`} onClickCapture={assign}>

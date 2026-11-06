@@ -26,7 +26,9 @@ def ocr_url() -> str:
     return os.environ.get("OCR_URL", "").rstrip("/")
 
 
-def ocr_pdf(data: bytes, filename: str = "scan.pdf") -> bytes:
+def ocr_pdf(data: bytes, filename: str = "scan.pdf", pages: str = "") -> bytes:
+    """`pages`: "" = only pages without text (service default), "all" or "1,3" = recognise these
+    even if they carry a text layer."""
     url = ocr_url()
     if not url:
         raise OcrError("Texterkennung (OCR) ist nicht eingerichtet (OCR_URL).")
@@ -34,6 +36,7 @@ def ocr_pdf(data: bytes, filename: str = "scan.pdf") -> bytes:
         r = httpx.post(
             f"{url}/ocr",
             files={"file": (filename, data, "application/pdf")},
+            data={"pages": pages} if pages else None,
             timeout=float(os.environ.get("OCR_CLIENT_TIMEOUT", "300")),
         )
     except httpx.HTTPError as exc:
@@ -44,13 +47,24 @@ def ocr_pdf(data: bytes, filename: str = "scan.pdf") -> bytes:
     return r.content
 
 
-def text_of_pdf(data: bytes, filename: str = "scan.pdf") -> tuple[PdfText, str | None]:
-    """PDF text, OCR'd if necessary. Returns (text, problem) – problem is a German message or None."""
+def text_of_pdf(data: bytes, filename: str = "scan.pdf", force: bool = False) -> tuple[PdfText, str | None]:
+    """PDF text, OCR'd where necessary. Returns (text, problem) – problem is a German message or None.
+
+    Only scanned pages are recognised (PdfText.scan_pages); `force` recognises every page,
+    e.g. when a scanner's own text layer is poor but passed the checks.
+    """
     pdf = PdfText.from_bytes(data)
-    if not pdf.needs_ocr or not ocr_url():
-        return pdf, None
+    if force:
+        pages = "all"
+    else:
+        scanned = pdf.scan_pages()
+        if not scanned:
+            return pdf, None
+        pages = ",".join(map(str, scanned))
+    if not ocr_url():
+        return pdf, "Texterkennung (OCR) ist nicht eingerichtet (OCR_URL)." if force else None
     try:
-        return PdfText.from_bytes(ocr_pdf(data, filename), ocr=True), None
+        return PdfText.from_bytes(ocr_pdf(data, filename, pages), ocr=True), None
     except OcrError as exc:
         log.warning("%s: %s", filename, exc)
         return pdf, str(exc)

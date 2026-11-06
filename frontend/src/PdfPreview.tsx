@@ -12,6 +12,7 @@ interface LinkProps {
   onSelect: (s: Selection | null) => void;
   links: FieldLink[];
   companyName: string;
+  forceOcr?: boolean;
 }
 
 /** One rendered page plus the click/drag layer used for linking fields. */
@@ -165,11 +166,14 @@ export function PdfPreview({ file, ...link }: { file: File } & LinkProps) {
     };
   }, [file]);
 
+  // re-read with forced text recognition: the words have to be fetched again
+  useEffect(() => setWords(null), [link.forceOcr]);
+
   // words are only needed (and fetched, OCR for scans) once linking is switched on
   useEffect(() => {
     if (!link.linkMode || words || loadingWords) return;
     setLoadingWords(true);
-    getPdfWords(file)
+    getPdfWords(file, link.forceOcr)
       .then(setWords)
       .catch((e) => setError(describe(e).join(" ")))
       .finally(() => setLoadingWords(false));

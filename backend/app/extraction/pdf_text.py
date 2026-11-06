@@ -3,9 +3,23 @@
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass
 
 import pdfplumber
+
+_WORD = re.compile(r"[A-Za-zÄÖÜäöüß]{2,}(?:[-.'][A-Za-zÄÖÜäöüß]+)*\.?")  # Rechnungs-Nr.
+_CODE = re.compile(r"(?=[0-9A-Z]*\d)[0-9A-Z]+(?:[-/.,:][0-9A-Z]+)*")  # 03.11.2026, S26/545-10, 1.744,00
+
+
+def text_quality(text: str) -> float:
+    """Share of tokens that look like words, numbers or codes (garbled scanner OCR scores low)."""
+    tokens = [t.strip(".,:;()[]\"'«»„“”€%") for t in text.split()]
+    tokens = [t for t in tokens if any(ch.isalnum() for ch in t)]  # "/" and "-" alone don't count
+    if not tokens:
+        return 0.0
+    good = sum(1 for t in tokens if _WORD.fullmatch(t) or _CODE.fullmatch(t))
+    return good / len(tokens)
 
 
 @dataclass
@@ -39,8 +53,35 @@ class PdfText:
 
     @property
     def needs_ocr(self) -> bool:
-        """Scanned PDF: (almost) no text layer."""
-        return len(self.text.strip()) < 20
+        """At least one page is a scan (see scan_pages)."""
+        return bool(self.scan_pages())
+
+    def scan_pages(self) -> list[int]:
+        """1-based numbers of pages that need text recognition.
+
+        A page counts as scanned when it has (almost) no text, or when an image
+        covers most of it and the text on it is sparse or garbled – scanners often
+        add a stamp ("Scan 1/2") or their own poor text layer, which must not stop
+        the OCR. Digital pages with real text are left alone.
+        """
+        pages = []
+        with pdfplumber.open(io.BytesIO(self.data)) as pdf:
+            for n, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text() or ""
+                chars = len("".join(text.split()))
+                area = float(page.width * page.height) or 1.0
+                covered = sum(
+                    max(0.0, min(img["x1"], page.width) - max(img["x0"], 0))
+                    * max(0.0, min(img["bottom"], page.height) - max(img["top"], 0))
+                    for img in page.images
+                )
+                scanned_look = covered / area >= 0.5
+                if chars < 20 and (page.images or len("".join(self.text.split())) < 20):
+                    # no text: a scan (blank pages of digital PDFs without images are skipped)
+                    pages.append(n)
+                elif scanned_look and (chars < 200 or text_quality(text) < 0.75):
+                    pages.append(n)
+        return pages
 
     def pages(self, max_pages: int = 10) -> list[PageWords]:
         """Words with positions (PDF points, origin top-left) for the click-to-link preview."""

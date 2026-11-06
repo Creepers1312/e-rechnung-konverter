@@ -112,7 +112,9 @@ Mit **„SAP-Stammdaten haben Vorrang“** (Standard) überschreiben die Stammda
 | Endpunkt | Beschreibung |
 |---|---|
 | `GET /health` | Status und installierte Sprachen |
-| `POST /ocr` | PDF hochladen (multipart, Feld `file`), Antwort: PDF mit Textebene |
+| `POST /ocr` | PDF hochladen (multipart, Feld `file`), Antwort: PDF mit Textebene. Optional `pages` = `all` oder `1,3`: diese Seiten werden auch dann erkannt, wenn sie schon eine Textebene haben |
+
+**Wann wird erkannt?** Pro Seite (`PdfText.scan_pages`): Seiten ohne Text, und Seiten, die überwiegend aus einem Bild bestehen und nur wenig oder unleserlichen Text tragen (Scanner-Stempel, schlechte Scanner-Texterkennung). Digitale Seiten bleiben unverändert. Im Editor erzwingt „Texterkennung erzwingen“ die Erkennung aller Seiten; für den PDF-Eingang gibt es dafür die Einstellung „Jede Seite per Texterkennung lesen“.
 
 Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der Dienst nicht erreichbar, werden Scans in „Zu prüfen“ gelegt statt verworfen.
 
