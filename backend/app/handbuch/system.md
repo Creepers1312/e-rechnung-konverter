@@ -158,7 +158,7 @@ Fehlende Spalten älterer Versionen werden beim Start ergänzt. Ohne `DATABASE_U
 
 ![Eingänge und Automatik](img/admin-eingaenge.png)
 
-- **Firmen (Stammdaten):** die eigenen Firmen (Rechnungssteller) mit Anschrift, USt-IdNr., Bankverbindung, Zahlungsbedingungen und optionalen Erkennungsmerkmalen; die erste ist der Standard. Je Firma die gespeicherten **Feldverknüpfungen** (Feld, Beispielwert, Bezugsbeschriftung, wer) mit „Löschen“. Wird eine Firma entfernt, werden ihre Verknüpfungen beim Speichern gelöscht.
+- **Firmen (Stammdaten):** je Firma eine Karte (Anschrift, USt-IdNr., IBAN, E-Rechnungs-Adresse, Zahl der Feldzuordnungen, Hinweise auf fehlende oder vertauschte Angaben). **„Bearbeiten“** öffnet ein Fenster mit Anschrift, Steuer & E-Rechnung, Ansprechpartner, Bank & Zahlung, Erkennungsmerkmalen und den **Feldzuordnungen** (mit „Löschen“); gespeichert wird sofort. Die erste Firma ist der Standard („Als Standard“). Wird eine Firma entfernt, werden ihre Zuordnungen gelöscht.
 
 ![Firmen](img/admin-firmen.png)
 
