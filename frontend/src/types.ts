@@ -117,6 +117,7 @@ export interface ArchivedDocument {
   source_name: string;
   profile: Profile;
   invoice_number: string;
+  seller_name: string;
   buyer_name: string;
   grand_total: string;
   currency: string;
@@ -193,6 +194,7 @@ export interface DocumentFilter {
   date_to?: string;
   profile?: Profile | "";
   source?: "pdf" | "idoc" | "manual" | "";
+  seller?: string;
   offset?: number;
   limit?: number;
 }

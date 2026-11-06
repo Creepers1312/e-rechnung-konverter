@@ -111,7 +111,7 @@ Jede erzeugte E-Rechnung wird im Archiv gespeichert – egal ob von Hand oder au
 
 ![Archiv](img/archiv.png)
 
-- **Suche** nach Rechnungsnummer oder Käufer, Filter nach **Zeitraum**, **Format** und **Quelle**.
+- **Suche** nach Rechnungsnummer, Käufer oder eigener Firma, Filter nach **Zeitraum**, **Firma**, **Format** und **Quelle**. Die Spalte **„Firma“** zeigt, welche eigene Firma die Rechnung ausgestellt hat.
 - **Herunterladen** lädt die E-Rechnung erneut herunter.
 - Mehrere Einträge per Häkchen auswählen und gemeinsam als **ZIP** herunterladen.
 - In der Spalte **„Von“** steht, wer die Rechnung erzeugt hat („worker“ = automatisch).

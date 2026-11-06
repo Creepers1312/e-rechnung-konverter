@@ -123,7 +123,8 @@ def main() -> None:
         growth = 1 + (365 - back) / 220  # business grows over the year
         for _ in range(rng.choices([0, 1, 2, 3, 4], [2, 3, 3, 2, 1])[0] + int(growth)):
             n += 1
-            inv = _invoice(seller, n, rng.choices(BUYERS, WEIGHTS)[0], day, rng)
+            issuer = rng.choices(companies, [6, 3, 1])[0].seller  # most invoices from the first company
+            inv = _invoice(issuer, n, rng.choices(BUYERS, WEIGHTS)[0], day, rng)
             auto = rng.random() < min(0.45 + (365 - back) / 700, 0.9)  # automation improves
             source = "idoc" if auto and rng.random() < 0.7 else "pdf" if auto else rng.choice(["pdf", "manual"])
             created = datetime.combine(day, datetime.min.time(), UTC) + timedelta(hours=rng.uniform(7, 17))
@@ -135,6 +136,7 @@ def main() -> None:
                     profile="xrechnung" if inv.buyer.name.startswith("Stadtwerke") else "zugferd",
                     invoice_number=inv.number,
                     buyer_name=inv.buyer.name,
+                    seller_name=inv.seller.name,
                     grand_total=compute_totals(inv).grand_total,
                     currency="EUR",
                     invoice=inv.model_dump(mode="json"),
