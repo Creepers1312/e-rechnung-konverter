@@ -284,6 +284,10 @@ export async function importCustomerMaster(file: File): Promise<ImportReport> {
 
 // --- own companies & click-to-link fields ---------------------------------------------
 
+export async function listCountries(): Promise<{ code: string; name: string }[]> {
+  return (await check(await apiFetch("/api/countries"))).json();
+}
+
 export async function listCompanies(): Promise<Company[]> {
   return (await check(await apiFetch("/api/companies"))).json();
 }

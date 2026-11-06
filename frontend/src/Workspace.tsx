@@ -10,6 +10,7 @@ import {
   validateInvoice,
 } from "./api";
 import { type BatchItem, BatchList, type Loaded, loadFile, processItem } from "./Batch";
+import { type Country, countryCodeOf, loadCountries } from "./CountrySelect";
 import { InvoiceForm, setPath } from "./InvoiceForm";
 import { type Selection, valueFor } from "./linking";
 import { PdfPreview } from "./PdfPreview";
@@ -84,9 +85,13 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
   const [linkMode, setLinkMode] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [links, setLinks] = useState<FieldLink[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    loadCountries()
+      .then(setCountries)
+      .catch(() => undefined);
     listCompanies()
       .then(setCompanies)
       .catch(() => undefined);
@@ -115,7 +120,9 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
     if (!input) return;
     e.preventDefault();
     const path = input.dataset.path!;
-    const value = valueFor(path, input.type, selection.text);
+    const value = path.endsWith("country_code")
+      ? countryCodeOf(selection.text, countries)
+      : valueFor(path, input.type, selection.text);
     if (value === null) {
       showToast(`„${selection.text}“ passt nicht in dieses Feld.`);
       return;
@@ -123,6 +130,7 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
     setInvoice((inv) => inv && setPath(inv, path, input.type === "date" ? value || null : value));
     const picked = selection;
     setSelection(null);
+    input.blur(); // e.g. the country picker would stay open
     if (!(path in LINKABLE) || !companyId) {
       showToast("Wert übernommen. (Positionen werden nicht dauerhaft verknüpft.)");
       return;

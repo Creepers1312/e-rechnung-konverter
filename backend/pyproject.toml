@@ -34,7 +34,7 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["extraction/templates/*.yaml", "handbuch/*.md", "handbuch/img/*.png"]
+app = ["extraction/templates/*.yaml", "handbuch/*.md", "handbuch/img/*.png", "data/*.json"]
 
 [tool.ruff]
 line-length = 120

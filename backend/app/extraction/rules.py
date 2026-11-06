@@ -18,6 +18,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from ..company import Company
+from ..countries import country_code
 from ..model import Address, Invoice, LineItem, Party, parse_decimal, round2
 from ..validation import StatedTotals
 from .pdf_text import PdfText
@@ -276,37 +277,43 @@ POSTCODE_PREFIX = {
     "H": "HU",
     "SK": "SK",
 }
-COUNTRY_NAMES = {
-    "deutschland": "DE",
-    "germany": "DE",
-    "österreich": "AT",
-    "oesterreich": "AT",
-    "austria": "AT",
-    "schweiz": "CH",
-    "switzerland": "CH",
-    "frankreich": "FR",
-    "france": "FR",
-    "italien": "IT",
-    "italy": "IT",
-    "niederlande": "NL",
-    "netherlands": "NL",
-    "belgien": "BE",
-    "belgium": "BE",
-    "luxemburg": "LU",
-    "polen": "PL",
-    "poland": "PL",
-    "tschechien": "CZ",
-    "czech republic": "CZ",
-    "dänemark": "DK",
-    "schweden": "SE",
-    "sweden": "SE",
-    "spanien": "ES",
-    "spain": "ES",
-    "ungarn": "HU",
-    "slowakei": "SK",
-}
 # return address above the window: "Firma GmbH, Straße 2, D-79618 Ort" (or with "·" / "|")
 RETURN_LINE = re.compile(r"[,·|].*\b(?:[A-Z]{1,2}-)?\d{4,5}\s+\S")
+
+
+FOREIGN_POSTCODE = re.compile(r"^(?P<postcode>\d{4,6})\s+(?P<city>\D.*)$|^(?P<city2>.*\D)[\s,]+(?P<postcode2>\d{4,6})$")
+
+
+def _foreign_buyer(rows: list[str]) -> Party:
+    """Address without a German "PLZ Ort" line, ended by a country line:
+
+    Name
+    Oeste de la Clinica Clorito Picado # 600   <- street
+    5 ESQUINAS DE TIBÁS, SAN JOSÈ              <- district, city (postcode optional)
+    COSTA RICA                                 <- country
+    """
+    ci = next((i for i in range(len(rows) - 1, 1, -1) if country_code(rows[i])), None)
+    if ci is None:
+        return Party()
+    city_line = rows[ci - 1].strip()
+    postcode, district = "", ""
+    if m := FOREIGN_POSTCODE.match(city_line):
+        postcode = m["postcode"] or m["postcode2"]
+        city_line = (m["city"] or m["city2"]).strip(" ,")
+    if "," in city_line:  # "5 ESQUINAS DE TIBÁS, SAN JOSÈ": district, city
+        district, city_line = (part.strip() for part in city_line.rsplit(",", 1))
+    street = rows[ci - 2] if ci >= 3 else ""
+    extra = rows[1 : ci - 2] if ci >= 3 else []
+    return Party(
+        name=rows[0],
+        address=Address(
+            line1=street,
+            line2=", ".join([*extra, district] if district else extra),
+            postcode=postcode,
+            city=city_line,
+            country_code=country_code(rows[ci]) or "",
+        ),
+    )
 
 
 def extract_buyer(cfg: dict[str, Any], pdf: PdfText, seller_name: str) -> Party:
@@ -319,13 +326,13 @@ def extract_buyer(cfg: dict[str, Any], pdf: PdfText, seller_name: str) -> Party:
     party = Party()
     pc_index = next((i for i, r in enumerate(rows) if POSTCODE_CITY.match(r)), None)
     if pc_index is None:
-        return party
+        return _foreign_buyer(rows)
     m = POSTCODE_CITY.match(rows[pc_index])
     assert m
     country = POSTCODE_PREFIX.get(m["cc"] or "D", m["cc"] or "DE")
     # a country line right below "PLZ Ort" wins over the prefix
-    if pc_index + 1 < len(rows) and rows[pc_index + 1].strip().lower() in COUNTRY_NAMES:
-        country = COUNTRY_NAMES[rows[pc_index + 1].strip().lower()]
+    if pc_index + 1 < len(rows) and (code := country_code(rows[pc_index + 1])):
+        country = code
     # Typical block: name, [extra lines like "z. Hd. ..."], street, postcode + city
     names = rows[: max(pc_index - 1, 0)]
     party.name = names[0] if names else ""

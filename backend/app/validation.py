@@ -69,7 +69,10 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
         err("BR-08", "seller.address", "Anschrift des Verkäufers unvollständig (PLZ/Ort).")
     if not s.address.country_code:
         err("BR-09", "seller.address.country_code", "Ländercode des Verkäufers fehlt.")
-    if not (b.address.city and b.address.postcode):
+    # EN 16931 only requires the country; a German address and XRechnung (BR-DE-8/9) need city and
+    # postcode. Abroad (e.g. Costa Rica) addresses often have no postcode – the city is enough.
+    needs_postcode = b.address.country_code in ("", "DE") or profile == "xrechnung"
+    if not b.address.city or (needs_postcode and not b.address.postcode):
         err("BR-10", "buyer.address", "Anschrift des Käufers unvollständig (PLZ/Ort).")
     if not b.address.country_code:
         err("BR-11", "buyer.address.country_code", "Ländercode des Käufers fehlt.")

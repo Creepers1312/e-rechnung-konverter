@@ -1,4 +1,5 @@
 import { BuyerLookup } from "./BuyerLookup";
+import { CountrySelect } from "./CountrySelect";
 import type { Invoice, Issue, LineItem, Party, VatCategory } from "./types";
 
 export type Update = (path: string, value: unknown) => void;
@@ -61,7 +62,7 @@ export function PartyFields({ prefix, party, update, issues, seller }: {
       {f("Adresszusatz", "address.line2", party.address.line2, { wide: true })}
       {f("PLZ", "address.postcode", party.address.postcode)}
       {f("Ort", "address.city", party.address.city)}
-      {f("Land (ISO)", "address.country_code", party.address.country_code)}
+      <CountrySelect path={`${prefix}.address.country_code`} value={party.address.country_code} update={update} issues={issues} />
       {f("USt-IdNr.", "vat_id", party.vat_id)}
       {seller && f("Steuernummer", "tax_number", party.tax_number)}
       {f("E-Rechnungs-Adresse (E-Mail)", "electronic_address", party.electronic_address, { type: "email", wide: true })}
@@ -132,11 +133,11 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
-              <td>{cell(i, "id", { className: "xs" })}</td>
-              <td>{cell(i, "seller_item_id", { className: "sm" })}</td>
-              <td>{cell(i, "name")}</td>
-              <td>{cell(i, "quantity", { className: "num" })}</td>
-              <td>
+              <td data-label="Pos">{cell(i, "id", { className: "xs" })}</td>
+              <td data-label="Artikel-Nr.">{cell(i, "seller_item_id", { className: "sm" })}</td>
+              <td data-label="Bezeichnung" className="name">{cell(i, "name")}</td>
+              <td data-label="Menge">{cell(i, "quantity", { className: "num" })}</td>
+              <td data-label="Einheit">
                 <select value={l.unit_code} onChange={(e) => update(`lines.${i}.unit_code`, e.target.value)}>
                   {UNITS.map(([code, label]) => (
                     <option key={code} value={code}>{label}</option>
@@ -144,17 +145,17 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
                   {!UNITS.some(([c]) => c === l.unit_code) && <option value={l.unit_code}>{l.unit_code}</option>}
                 </select>
               </td>
-              <td>{cell(i, "unit_price", { className: "num" })}</td>
-              <td>{cell(i, "price_base_quantity", { className: "xs num" })}</td>
-              <td>
+              <td data-label="Preis netto">{cell(i, "unit_price", { className: "num" })}</td>
+              <td data-label="je">{cell(i, "price_base_quantity", { className: "xs num" })}</td>
+              <td data-label="Steuer">
                 <select value={l.vat_category} onChange={(e) => update(`lines.${i}.vat_category`, e.target.value)}>
                   {CATEGORIES.map(([code, label]) => (
                     <option key={code} value={code}>{label}</option>
                   ))}
                 </select>
               </td>
-              <td>{cell(i, "vat_rate", { className: "xs num" })}</td>
-              <td>
+              <td data-label="%">{cell(i, "vat_rate", { className: "xs num" })}</td>
+              <td className="del">
                 <button className="icon" onClick={() => remove(i)} aria-label={`Position ${i + 1} löschen`}>×</button>
               </td>
             </tr>
