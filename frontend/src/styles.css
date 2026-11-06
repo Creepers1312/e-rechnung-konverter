@@ -546,3 +546,21 @@ dialog.modal form { display: flex; flex-direction: column; max-height: calc(100v
 .link-list li { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .link-list li > div { display: grid; gap: 1px; min-width: 0; }
 .link-list .sample { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- line totals --- */
+.lines th.num { text-align: right; }
+.lines td.line-total { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: 10px; color: var(--text); }
+.lines td.name input { min-width: 200px; }
+.lines-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.lines-sum { margin: 0; min-width: 280px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.lines-sum > div { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; }
+.lines-sum dt { color: var(--muted); }
+.lines-sum dd { margin: 0; text-align: right; }
+.lines-sum .grand { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 7px; font-weight: 700; font-size: 1.05rem; }
+.lines-sum .grand dt { color: var(--text); }
+.sum-ok { display: block; color: var(--ok); font-weight: 500; font-size: 0.75rem; }
+.sum-bad { display: block; color: var(--error); font-weight: 600; font-size: 0.75rem; }
+@container lines (max-width: 900px) {
+  .lines td.line-total { padding: 0; text-align: left; font-weight: 600; }
+  .lines td.name input { min-width: 0; }
+}

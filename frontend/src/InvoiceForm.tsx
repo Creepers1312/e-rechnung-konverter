@@ -1,6 +1,7 @@
 import { BuyerLookup } from "./BuyerLookup";
 import { CountrySelect } from "./CountrySelect";
-import type { Invoice, Issue, LineItem, Party, VatCategory } from "./types";
+import { eur } from "./util";
+import type { Invoice, Issue, LineItem, Party, StatedTotals, Totals, VatCategory } from "./types";
 
 export type Update = (path: string, value: unknown) => void;
 
@@ -95,7 +96,34 @@ const CATEGORIES: [VatCategory, string][] = [
   ["G", "Export"],
 ];
 
-function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Update; issues: Issue[] }) {
+function num(value: string): number {
+  const v = String(value ?? "").trim();
+  return Number(v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v) || 0;
+}
+
+/** Line net amount as the backend computes it: round(quantity × price / base, 2). */
+function lineNet(l: LineItem): number {
+  const base = num(l.price_base_quantity) || 1;
+  return Math.round(((num(l.quantity) * num(l.unit_price)) / base + Number.EPSILON) * 100) / 100;
+}
+
+function same(a: string | number, b: string | number): boolean {
+  return Math.abs(Number(a) - Number(b)) <= 0.01;
+}
+
+function LinesTable({
+  lines,
+  update,
+  issues,
+  totals,
+  stated,
+}: {
+  lines: LineItem[];
+  update: Update;
+  issues: Issue[];
+  totals?: Totals | null;
+  stated?: StatedTotals | null;
+}) {
   const add = () =>
     update("lines", [
       ...lines,
@@ -127,6 +155,7 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
             <th title="Der Preis gilt für so viele Einheiten, z. B. 100 bei „Preis / 100 kg“">je</th>
             <th>Steuer</th>
             <th>%</th>
+            <th className="num">Gesamt netto</th>
             <th />
           </tr>
         </thead>
@@ -155,6 +184,9 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
                 </select>
               </td>
               <td data-label="%">{cell(i, "vat_rate", { className: "xs num" })}</td>
+              <td data-label="Gesamt netto" className="line-total">
+                {eur(lineNet(l))}
+              </td>
               <td className="del">
                 <button className="icon" onClick={() => remove(i)} aria-label={`Position ${i + 1} löschen`}>×</button>
               </td>
@@ -162,12 +194,72 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
           ))}
         </tbody>
       </table>
-      <button className="secondary" onClick={add}>+ Position</button>
+      <div className="lines-foot">
+        <button className="secondary" onClick={add}>+ Position</button>
+        {totals && (
+          <dl className="lines-sum">
+            <div>
+              <dt>Summe netto</dt>
+              <dd>
+                {eur(totals.line_total)}
+                {stated?.net != null && <Check ok={same(stated.net, totals.line_total)} pdf={stated.net} />}
+              </dd>
+            </div>
+            {totals.breakdown.map((b) => (
+              <div key={`${b.category}-${b.rate}`}>
+                <dt>
+                  {b.category === "S"
+                    ? `USt ${Number(b.rate).toLocaleString("de-DE")} %`
+                    : `${TAX_LABEL[b.category] ?? b.category} (0 %)`}
+                </dt>
+                <dd>{eur(b.amount)}</dd>
+              </div>
+            ))}
+            <div className="grand">
+              <dt>Gesamtbetrag brutto</dt>
+              <dd>
+                {eur(totals.grand_total)}
+                {stated?.gross != null && <Check ok={same(stated.gross, totals.grand_total)} pdf={stated.gross} />}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </div>
     </div>
   );
 }
 
-export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; update: Update; issues: Issue[] }) {
+const TAX_LABEL: Record<string, string> = {
+  Z: "Nullsatz",
+  E: "Steuerfrei",
+  AE: "Reverse Charge",
+  K: "Innergem. Lieferung",
+  G: "Ausfuhr (steuerfrei)",
+};
+
+function Check({ ok, pdf }: { ok: boolean; pdf: string }) {
+  return ok ? (
+    <small className="sum-ok" title="stimmt mit dem PDF überein">
+      ✓ wie PDF
+    </small>
+  ) : (
+    <small className="sum-bad">≠ PDF {eur(pdf)}</small>
+  );
+}
+
+export function InvoiceForm({
+  invoice,
+  update,
+  issues,
+  totals,
+  stated,
+}: {
+  invoice: Invoice;
+  update: Update;
+  issues: Issue[];
+  totals?: Totals | null;
+  stated?: StatedTotals | null;
+}) {
   const f = (label: string, path: string, value: string | null, extra: Partial<FieldProps> = {}) => (
     <Field label={label} path={path} value={value} update={update} issues={issues} {...extra} />
   );
@@ -200,7 +292,7 @@ export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; upd
       </section>
       <section>
         <h2>Positionen</h2>
-        <LinesTable lines={invoice.lines} update={update} issues={issues} />
+        <LinesTable lines={invoice.lines} update={update} issues={issues} totals={totals} stated={stated} />
       </section>
       <section>
         <h2>Zahlung</h2>
