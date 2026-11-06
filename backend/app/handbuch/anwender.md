@@ -69,6 +69,8 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 - **Käuferdaten** wie E-Rechnungs-Adresse oder Leitweg-ID werden aus dem Kundenstamm (SAP) bzw. aus früheren Rechnungen ergänzt. Unter „Käufer“ können Sie über **„Aus Adressbuch übernehmen“** auch selbst suchen.
 - **Preis je 100 kg / 1000 kg:** Steht der Preis pro 100 oder 1000 Einheiten auf der Rechnung, trägt die App das in der Spalte **„je“** der Positionen ein und rechnet den Positionsbetrag entsprechend.
 - **Steuerfreie Lieferungen:** Steht „tax free export“, „steuerfreie Ausfuhr“ oder „innergemeinschaftliche Lieferung“ auf der Rechnung und ist keine Umsatzsteuer ausgewiesen, werden die Positionen automatisch steuerfrei gesetzt.
+- **Land:** Ins Feld „Land“ klicken – es öffnet sich eine Liste mit Kürzel und Land (häufige Länder oben). Tippen Sie das Kürzel oder den Namen, z. B. „CR“ oder „Costa“, und wählen Sie mit Klick oder Enter.
+- **Auslandsanschriften** ohne deutsche „PLZ Ort“-Zeile werden über die Länderzeile am Ende erkannt (z. B. „… SAN JOSÉ“ / „COSTA RICA“). Für Käufer im Ausland genügt der Ort; die PLZ ist nur bei deutschen Anschriften und für XRechnung Pflicht.
 - Mit **„PDF ausblenden“** bekommt das Formular mehr Platz.
 - Wechseln Sie ruhig zwischendurch die Seite – die angefangene Rechnung bleibt erhalten.
 - **Firma:** Arbeiten Sie für mehrere eigene Firmen, erkennt die App am Briefkopf (USt-IdNr., IBAN, Name), welche Firma die Rechnung ausgestellt hat. Oben in der Leiste steht die erkannte **Firma**; stimmt sie nicht, wählen Sie die richtige aus.

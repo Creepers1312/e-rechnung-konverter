@@ -168,11 +168,12 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .field.narrow { max-width: 260px; margin-bottom: 12px; }
 .field.end button.primary { width: auto; }
 
-.lines { overflow-x: auto; }
-.lines table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.lines { overflow-x: auto; container-type: inline-size; container-name: lines; }
+.lines table { width: 100%; border-collapse: collapse; min-width: 940px; }
 .lines th { text-align: left; font-size: 0.75rem; color: var(--muted); font-weight: 500; padding: 0 4px 6px; }
 .lines td { padding: 3px 4px; }
 .lines input.num { text-align: right; }
+.lines input.num:not(.xs) { width: 104px; }
 .lines input.xs { width: 54px; }
 .lines input.sm { width: 110px; }
 .lines select { min-width: 110px; }
@@ -473,3 +474,32 @@ code.method.delete { color: var(--error); }
 .company-card .toolbar { display: flex; gap: 14px; margin: 0; }
 button.link.danger { color: var(--error); }
 table.compact td, table.compact th { padding: 6px 8px; font-size: 0.86rem; }
+
+/* --- country picker --- */
+.country-field { position: relative; }
+.country-list {
+  position: absolute; z-index: 30; top: 100%; left: 0; right: 0; margin: 2px 0 0; padding: 4px 0; list-style: none;
+  max-height: 280px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / 0.16); min-width: 240px;
+}
+.country-list li { padding: 6px 10px; cursor: pointer; font-size: 0.9rem; display: flex; gap: 8px; align-items: baseline; }
+.country-list li code { font-weight: 700; min-width: 2.2em; color: var(--muted); }
+.country-list li.active { background: var(--accent-soft); }
+.country-list li.chosen code { color: var(--accent); }
+.country-list li.sep { border-bottom: 1px solid var(--border); }
+
+/* line items as cards when the form is narrow (e.g. next to the PDF preview) */
+@container lines (max-width: 900px) {
+  .lines table, .lines tbody { display: block; min-width: 0; }
+  .lines thead { display: none; }
+  .lines tr {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; position: relative;
+    padding: 10px 34px 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .lines td { padding: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lines td::before { content: attr(data-label); font-size: 0.72rem; color: var(--muted); }
+  .lines td.name { grid-column: span 2; }
+  .lines td input, .lines td select, .lines input.xs, .lines input.sm, .lines input.num:not(.xs) { width: 100%; min-width: 0; }
+  .lines td.del { position: absolute; right: 0; top: 26px; }
+  .lines td.del::before { content: none; }
+}

@@ -24,8 +24,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .countries import country_code
 from .db import Customer
-from .extraction.rules import COUNTRY_NAMES, POSTCODE_PREFIX
+from .extraction.rules import POSTCODE_PREFIX
 from .model import Address, Contact, Party
 
 # target field -> (German label, header aliases). Aliases are compared normalised
@@ -152,9 +153,9 @@ def _country(value: str) -> str:
     v = value.strip()
     if not v:
         return "DE"
-    if v.lower() in COUNTRY_NAMES:
-        return COUNTRY_NAMES[v.lower()]
-    return POSTCODE_PREFIX.get(v.upper(), v.upper()[:2])
+    if v.upper() in POSTCODE_PREFIX and len(v) <= 2:  # SAP LAND1 "D", "A", "CH"
+        return POSTCODE_PREFIX[v.upper()]
+    return country_code(v) or POSTCODE_PREFIX.get(v.upper(), v.upper()[:2])
 
 
 def party_from_row(row: dict[str, str], mapping: dict[str, str]) -> tuple[Party, str]:

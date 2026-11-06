@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from . import field_links
 from .auth import current_user
 from .company import Company
+from .countries import countries
 from .db import FieldLink, User, audit, get_session
 from .ocr import text_of_pdf
 from .settings import get_companies
@@ -43,6 +44,17 @@ class PdfWords(BaseModel):
 class LinkableField(BaseModel):
     path: str
     label: str
+
+
+class Country(BaseModel):
+    code: str
+    name: str
+
+
+@router.get("/countries", response_model=list[Country])
+def list_countries(_: User = Depends(current_user)) -> list[Country]:
+    """ISO country codes with German names (country picker)."""
+    return [Country(code=c["code"], name=c["name"]) for c in countries()]
 
 
 @router.get("/companies", response_model=list[Company])
