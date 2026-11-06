@@ -442,3 +442,34 @@ code.method.delete { color: var(--error); }
 .checks { display: grid; gap: 8px; }
 .doc-endpoints .section-head { border-top: 1px solid var(--border); margin-top: 30px; padding-top: 12px; }
 .doc-endpoints .section-head h2 { border-top: 0; margin: 0; padding: 0; }
+
+/* --- click-to-link fields (PDF preview -> form) --- */
+.pdf-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pdf-head h2 { margin: 0; white-space: nowrap; }
+.small-btn { padding: 5px 10px; font-size: 0.82rem; width: auto; }
+.link-help {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 8px 0; padding: 8px 10px;
+  background: var(--info-bg); border-radius: 8px; font-size: 0.84rem;
+}
+.pdf-page { position: relative; }
+.pdf-page canvas { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; box-shadow: var(--shadow); }
+.pdf-link-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; user-select: none; }
+.pdf-link-layer > span { position: absolute; pointer-events: none; border-radius: 2px; }
+.pdf-word { background: rgb(31 95 191 / 0.1); }
+.pdf-word.hover { background: rgb(31 95 191 / 0.25); outline: 1px solid var(--accent); }
+.pdf-selected { background: rgb(31 95 191 / 0.22); outline: 2px solid var(--accent); }
+.pdf-drag { border: 1.5px dashed var(--accent); background: rgb(31 95 191 / 0.08); }
+.pdf-linked { outline: 1.5px dashed #18794e; }
+.pdf-linked small {
+  position: absolute; left: 0; bottom: 100%; white-space: nowrap; font-size: 9px; line-height: 1.3;
+  padding: 0 4px; border-radius: 3px; background: #18794e; color: #fff;
+}
+.editor-form.link-armed input[data-path], .editor-form.link-armed textarea[data-path] {
+  cursor: copy; outline: 2px dashed var(--accent); outline-offset: 1px;
+}
+.editor-form.link-armed input[data-path]:hover { background: var(--accent-soft); }
+.company-select { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.company-select select { width: auto; max-width: 220px; padding: 5px 8px; }
+.company-card .toolbar { display: flex; gap: 14px; margin: 0; }
+button.link.danger { color: var(--error); }
+table.compact td, table.compact th { padding: 6px 8px; font-size: 0.86rem; }

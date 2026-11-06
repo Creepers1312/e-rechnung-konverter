@@ -12,19 +12,20 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from . import auth, customer_import
 from .auth import Role, current_session, require_admin
 from .company import Company
-from .db import AuditEntry, Customer, LoginSession, User, audit, get_session, get_setting, put_setting
+from .db import AuditEntry, Customer, FieldLink, LoginSession, User, audit, get_session, get_setting, put_setting
 from .model import Party
 from .settings import (
     CustomerImportSettings,
     IdocSettings,
     PdfInboxSettings,
-    get_company,
+    assign_ids,
+    get_companies,
     get_customer_import_settings,
     get_idoc_settings,
     get_pdf_inbox_settings,
@@ -71,7 +72,7 @@ class UserUpdate(BaseModel):
 
 
 class Settings(BaseModel):
-    company: Company
+    companies: list[Company] = Field(min_length=1, max_length=10)  # own companies, the first is the default
     idoc: IdocSettings
     pdf_inbox: PdfInboxSettings = Field(default_factory=PdfInboxSettings)
     customer_import: CustomerImportSettings = Field(default_factory=CustomerImportSettings)
@@ -194,7 +195,7 @@ def update_user(
 @router.get("/admin/settings", response_model=Settings)
 def read_settings(_: User = Depends(require_admin), session: Session = Depends(get_session)) -> Settings:
     return Settings(
-        company=get_company(session),
+        companies=get_companies(session),
         idoc=get_idoc_settings(session),
         pdf_inbox=get_pdf_inbox_settings(session),
         customer_import=get_customer_import_settings(session),
@@ -205,7 +206,11 @@ def read_settings(_: User = Depends(require_admin), session: Session = Depends(g
 def write_settings(
     body: Settings, admin: User = Depends(require_admin), session: Session = Depends(get_session)
 ) -> Settings:
-    put_setting(session, "company", body.company.model_dump(mode="json"), admin.username)
+    companies = assign_ids([c.model_copy(deep=True) for c in body.companies])
+    put_setting(session, "companies", {"items": [c.model_dump(mode="json") for c in companies]}, admin.username)
+    # links of removed companies would never be used again
+    session.execute(delete(FieldLink).where(FieldLink.company_id.not_in([c.id for c in companies])))
+    body = body.model_copy(update={"companies": companies})
     put_setting(session, "idoc", body.idoc.model_dump(mode="json"), admin.username)
     put_setting(session, "pdf_inbox", body.pdf_inbox.model_dump(mode="json"), admin.username)
     put_setting(session, "customer_import", body.customer_import.model_dump(mode="json"), admin.username)
@@ -215,7 +220,7 @@ def write_settings(
         "settings_changed",
         idoc=body.idoc.model_dump(mode="json"),
         pdf_inbox=body.pdf_inbox.model_dump(mode="json"),
-        company=body.company.seller.name,
+        companies=[c.seller.name for c in companies],
     )
     session.commit()
     return body

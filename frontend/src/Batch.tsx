@@ -11,6 +11,7 @@ export interface Loaded {
   warnings: string[];
   notes: string[];
   templateName: string;
+  companyId: string; // own company the invoice belongs to (field links are stored per company)
   reviewId?: number; // opened from "Zu prüfen": exporting marks it done
   reviewProfile?: Profile;
 }
@@ -27,7 +28,7 @@ export interface BatchItem {
   message?: string;
 }
 
-export async function loadFile(file: File): Promise<Loaded> {
+export async function loadFile(file: File, companyId = ""): Promise<Loaded> {
   if (isIdoc(file)) {
     const r = await importIdoc(file);
     return {
@@ -38,9 +39,10 @@ export async function loadFile(file: File): Promise<Loaded> {
       warnings: [],
       notes: r.notes,
       templateName: "SAP ECC IDoc (INVOIC02)",
+      companyId: r.company_id,
     };
   }
-  const r = await extractPdf(file);
+  const r = await extractPdf(file, companyId);
   return {
     file,
     kind: "pdf",
@@ -49,6 +51,7 @@ export async function loadFile(file: File): Promise<Loaded> {
     warnings: r.warnings,
     notes: r.notes,
     templateName: r.template_name,
+    companyId: r.company_id,
   };
 }
 

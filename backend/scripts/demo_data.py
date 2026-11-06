@@ -28,6 +28,7 @@ from app.company import load_company  # noqa: E402
 from app.db import Document, User, get_engine, get_setting, put_setting  # noqa: E402
 from app.export.pdf_render import render_invoice_pdf  # noqa: E402
 from app.model import Address, Invoice, LineItem, Party, compute_totals  # noqa: E402
+from app.settings import assign_ids  # noqa: E402
 from app.validation import validate  # noqa: E402
 from app.worker import IMPORT_STATUS_KEY, STATUS_KEY  # noqa: E402
 
@@ -89,6 +90,18 @@ def main() -> None:
     rng = random.Random(42)
     company = load_company()
     seller = company.seller
+    # a group of three own companies (invented); the first one issues the demo invoices
+    others = [
+        ("Beispiel Carbon GmbH", "DE222222222", "DE02120300000000202051", ["Werk Süd"]),
+        ("Beispiel Logistik GmbH", "DE333333333", "DE02500105170137075030", []),
+    ]
+    companies = [company.model_copy(update={"id": "firma-1"}, deep=True)]
+    for name, vat, iban, keywords in others:
+        c = company.model_copy(deep=True)
+        c.id, c.keywords = "", keywords
+        c.seller.name, c.seller.vat_id, c.payment.iban, c.payment.account_holder = name, vat, iban, name
+        companies.append(c)
+    put_setting(db, "companies", {"items": [c.model_dump(mode="json") for c in assign_ids(companies)]}, "admin")
 
     for username, role in (("admin", "admin"), ("anna", "user")):
         if not db.scalar(select(User).where(User.username == username)):

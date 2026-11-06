@@ -14,6 +14,7 @@
 #     --yes                     keine Rückfragen (Standardwerte / Umgebungsvariablen)
 #     --no-build                Images nicht bauen (müssen bereits vorhanden sein)
 #     --no-pull                 Git-Update überspringen
+#     --no-prune                alte Docker-Images/Build-Cache am Ende nicht aufräumen
 #     -h, --help                Hilfe
 #
 #  Ohne Rückfragen, z. B.:
@@ -43,6 +44,7 @@ while [ $# -gt 0 ]; do
     --yes|-y) ASSUME_YES=true ;;
     --no-build) BUILD=false ;;
     --no-pull) GIT_PULL=false ;;
+    --no-prune) DEPLOY_PRUNE=false ;;
     --mode) MODE="${2:-}"; shift ;;
     --mode=*) MODE="${1#*=}" ;;
     -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -314,6 +316,21 @@ esac
 if [ -n "$ADMIN_PW" ]; then
   # The admin exists now; do not keep the initial password lying around in .env.
   env_set ADMIN_PASSWORD ""
+fi
+
+# =============================================================================
+step "Aufräumen"
+# =============================================================================
+# Only garbage: untagged images no container uses (the old versions replaced by
+# this build/pull) and build cache older than 7 days. Never containers, volumes,
+# networks or tagged images – other stacks on this host stay untouched.
+# Skip with:  ./deploy.sh --no-prune  (or DEPLOY_PRUNE=false)
+if [ "${DEPLOY_PRUNE:-true}" = true ]; then
+  freed_images=$("${DOCKER[@]}" image prune -f 2>/dev/null | sed -n 's/^Total reclaimed space: //p')
+  freed_cache=$("${DOCKER[@]}" builder prune -f --filter until=168h 2>/dev/null | sed -n 's/^Total:[[:space:]]*//p')
+  ok "Alte Images entfernt (${freed_images:-0B} frei), Build-Cache älter als 7 Tage entfernt (${freed_cache:-0B})"
+else
+  ok "Übersprungen (--no-prune)"
 fi
 
 # =============================================================================

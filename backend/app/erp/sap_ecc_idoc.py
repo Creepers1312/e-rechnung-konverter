@@ -47,6 +47,8 @@ MAPPING = {
         "L": "LTR",
         "LE": "C62",
         "PAU": "LS",
+        "TO": "TNE",
+        "T": "TNE",
     },
 }
 
@@ -91,11 +93,32 @@ def _party(seg: etree._Element | None) -> Party:
     )
 
 
-def parse_invoic02(xml: bytes, company: Company) -> Invoice:
-    root = etree.fromstring(xml)
+def _idoc(root: etree._Element) -> etree._Element | None:
     idoc = root.find("IDOC")
     if idoc is None:
         idoc = root if root.tag == "IDOC" else None
+    return idoc
+
+
+def pick_company(xml: bytes, companies: list[Company]) -> Company:
+    """Own company of an IDoc: EIGENUINR (own VAT ID) or the RS partner's name; else the first."""
+    try:
+        idoc = _idoc(etree.fromstring(xml))
+    except etree.XMLSyntaxError:
+        return companies[0]
+    if idoc is None:
+        return companies[0]
+    vat = "".join(_t(idoc.find("E1EDK01"), "EIGENUINR").split()).upper()
+    for c in companies:
+        if vat and "".join(c.seller.vat_id.split()).upper() == vat:
+            return c
+    rs = _party(next((p for p in idoc.findall("E1EDKA1") if _t(p, "PARVW") == MAPPING["seller_parvw"]), None))
+    name = rs.name.strip().lower()
+    return next((c for c in companies if name and c.seller.name.strip().lower() == name), companies[0])
+
+
+def parse_invoic02(xml: bytes, company: Company) -> Invoice:
+    idoc = _idoc(etree.fromstring(xml))
     if idoc is None or idoc.find("E1EDK01") is None:
         raise ValueError("Kein INVOIC02-IDoc (Segment E1EDK01 fehlt).")
 
@@ -164,9 +187,9 @@ class SapEccIdocFolderAdapter:
 
     name = "SAP ECC (INVOIC02-IDoc, Ordner)"
 
-    def __init__(self, inbox: Path, company: Company) -> None:
+    def __init__(self, inbox: Path, companies: Company | list[Company]) -> None:
         self.inbox = inbox
-        self.company = company
+        self.companies = companies if isinstance(companies, list) else [companies]
 
     def list_new_invoices(self, since: datetime | None = None) -> list[str]:
         files = sorted(self.inbox.glob("*.xml"))
@@ -179,4 +202,5 @@ class SapEccIdocFolderAdapter:
         path = (self.inbox / invoice_id).resolve()
         if path.parent != self.inbox.resolve():
             raise ValueError("Ungültige IDoc-ID.")
-        return parse_invoic02(path.read_bytes(), self.company)
+        xml = path.read_bytes()
+        return parse_invoic02(xml, pick_company(xml, self.companies))

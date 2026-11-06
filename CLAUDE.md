@@ -22,10 +22,18 @@ comments and identifiers are English.
 4. **ERP access goes through adapters** implementing `ErpAdapter`
    (`app/erp/base.py`). SAP ECC is read via INVOIC02 IDoc XML files — no RFC/SDK.
    SAP field mapping lives in one `MAPPING` dict.
-5. **Own company = seller**, edited by admins in the UI (`settings` table, read
-   via `settings.get_company`); `backend/config/company.yaml` (git-ignored,
-   template `company.example.yaml`) is only the fallback until then.
-   Master data wins over document data.
+5. **Own companies = sellers** (several, e.g. a group of three), edited by admins
+   in Verwaltung → Firmen (`settings` key `companies`, read via
+   `settings.get_companies` / `get_company(session, id)`; the first is the
+   default). A document is assigned by `settings.detect_company` (VAT ID, tax
+   number, IBAN, keywords, name; IDocs by `EIGENUINR`). `backend/config/company.yaml`
+   (git-ignored, template `company.example.yaml`) is only the fallback until
+   an admin saves. Master data wins over document data.
+   **Field links** (`app/field_links.py`, table `field_links`): a user clicks a
+   value in the PDF preview, then the form field; the spot (box + neighbouring
+   label as anchor) is stored per company and applied after the rules
+   (`app/recognize.py`). Only header fields in `field_links.LINKABLE` (keep in
+   sync with `LINKABLE` in `frontend/src/Workspace.tsx`).
 6. **The API is stateless while editing.** The client holds invoice + source PDF
    between calls; only finished exports are persisted (`app/db.py`, table
    `documents`). `app/convert.py` is the single validate-then-build path used by

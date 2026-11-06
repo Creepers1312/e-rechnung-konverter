@@ -163,7 +163,7 @@ def test_last_admin_cannot_lock_themselves_out() -> None:
 
 def test_settings_change_company_data_used_by_extraction(admin_client: TestClient, client: TestClient) -> None:
     settings = admin_client.get("/api/admin/settings").json()
-    settings["company"]["seller"]["name"] = "Neue Firma GmbH"
+    settings["companies"][0]["seller"]["name"] = "Neue Firma GmbH"
     settings["idoc"] = {"enabled": False, "profile": "xrechnung", "interval_seconds": 30}
     r = admin_client.put("/api/admin/settings", json=settings)
     assert r.status_code == 200, r.text

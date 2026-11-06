@@ -22,7 +22,16 @@ def _eur(value: Decimal) -> str:
     return f"{s} €"
 
 
-UNIT_LABELS = {"H87": "Stk", "C62": "Stk", "HUR": "Std", "KGM": "kg", "MTR": "m", "LTR": "l", "LS": "Pauschal"}
+UNIT_LABELS = {
+    "H87": "Stk",
+    "C62": "Stk",
+    "HUR": "Std",
+    "KGM": "kg",
+    "MTR": "m",
+    "LTR": "l",
+    "LS": "Pauschal",
+    "TNE": "Tonne",
+}
 
 
 def _qty(value: Decimal) -> str:

@@ -54,6 +54,23 @@ await page.locator(".workspace input[type=file]").first().setInputFiles(SAMPLE);
 await page.waitForSelector(".editor", { timeout: 20000 });
 await shot("umwandeln-pruefen", { wait: 2500 });
 
+// click-to-link: pick the invoice number in the PDF, the form fields light up
+await page.getByRole("button", { name: "Felder zuordnen" }).click();
+await page.waitForSelector(".pdf-word", { timeout: 30000 });
+{
+  const layer = page.locator(".pdf-link-layer").first();
+  const target = page.locator(".pdf-word").nth(await page.$$eval(".pdf-word", (els) => {
+    // the word right of "Rechnungsnummer:" in the sample PDF: the widest span on the first header line on the right
+    const rects = els.map((e, i) => ({ i, r: e.getBoundingClientRect() }));
+    const right = rects.filter((x) => x.r.x > rects[0].r.x + 150).sort((a, b) => a.r.y - b.r.y || b.r.x - a.r.x);
+    return right[0]?.i ?? 0;
+  }));
+  const box = await target.boundingBox();
+  if (box && (await layer.count())) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+await shot("felder-zuordnen", { wait: 600 });
+await page.getByRole("button", { name: "Zuordnen beenden" }).click();
+
 await page.goto(`${BASE}/#/pruefen`);
 await page.waitForTimeout(800);
 await shot("zu-pruefen-liste");
@@ -82,6 +99,7 @@ await page.goto(`${BASE}/#/verwaltung`);
 await page.waitForTimeout(800);
 await shot("admin-benutzer");
 for (const [tab, name] of [
+  ["Firmen", "admin-firmen"],
   ["Eingänge & Automatik", "admin-eingaenge"],
   ["Kundenstamm (SAP)", "admin-kundenstamm"],
   ["Einstellungen", "admin-einstellungen"],
