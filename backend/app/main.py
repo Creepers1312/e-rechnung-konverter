@@ -25,12 +25,11 @@ from .admin import router as admin_router
 from .auth import bootstrap_admin, current_user
 from .companies_api import router as companies_router
 from .company import Company
-from .convert import EInvoice, NotExportable, convert
+from .convert import EInvoice, NotExportable, check_xml, convert
 from .db import Document, ReviewItem, User, archive, audit, get_engine, get_session, get_setting, search_documents
 from .docs import router as docs_router
 from .erp.sap_ecc_idoc import parse_invoic02, pick_company
 from .export.cii import Profile, build_cii
-from .export.zugferd import check_xsd
 from .extraction.rules import ExtractionResult
 from .model import Invoice, Party, Totals, compute_totals
 from .ocr import text_of_pdf
@@ -165,6 +164,8 @@ def _convert_and_archive(
     review_id: int | None = None,
 ) -> Response:
     item = _open_review_item(session, review_id) if review_id is not None else None
+    if item is not None and source_pdf is None and item.pdf and profile == "zugferd":
+        source_pdf = item.pdf  # embed into the original scan, as for a direct upload
     try:
         result: EInvoice = convert(invoice, profile, source_pdf)
     except NotExportable as exc:
@@ -173,9 +174,6 @@ def _convert_and_archive(
         ) from exc
     audit(session, user.username, "export", invoice_number=invoice.number, profile=profile)
     customers.remember(session, invoice, user.username)  # committed together with the archive entry
-    if item is not None and source_pdf is None and item.pdf and profile == "zugferd":
-        source_pdf = item.pdf  # embed into the original scan, as for a direct upload
-        result = convert(invoice, profile, source_pdf)
     doc = archive(
         session,
         invoice,
@@ -261,10 +259,8 @@ def search_customers(
 @app.post("/api/validate", response_model=ValidateResponse)
 def validate_invoice(req: ValidateRequest, _: User = Depends(current_user)) -> ValidateResponse:
     issues = validate(req.invoice, req.profile, req.stated_totals)
-    if not any(i.severity == "error" for i in issues):
-        xsd_error = check_xsd(build_cii(req.invoice, req.profile))
-        if xsd_error:
-            issues.append(Issue(code="XSD", field="", message=f"Schema-Fehler: {xsd_error}"))
+    if not any(i.severity == "error" for i in issues):  # official rules only make sense on a complete invoice
+        issues += check_xml(build_cii(req.invoice, req.profile), req.profile)
     return ValidateResponse(totals=compute_totals(req.invoice), issues=issues)
 
 

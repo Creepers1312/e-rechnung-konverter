@@ -15,7 +15,7 @@ from typing import Literal
 
 from lxml import etree
 
-from ..model import Invoice, Party, compute_totals
+from ..model import Address, Invoice, Party, compute_totals
 
 Profile = Literal["zugferd", "xrechnung"]
 
@@ -23,6 +23,8 @@ GUIDELINE_IDS: dict[Profile, str] = {
     "zugferd": "urn:cen.eu:en16931:2017",
     "xrechnung": "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
 }
+
+BUSINESS_PROCESS_ID = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"
 
 NS = {
     "rsm": "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
@@ -71,8 +73,17 @@ def _party(parent: etree._Element, tag: str, party: Party, *, with_contact: bool
             _sub(_sub(contact, "ram:TelephoneUniversalCommunication"), "ram:CompleteNumber", c.phone)
         if c.email:
             _sub(_sub(contact, "ram:EmailURIUniversalCommunication"), "ram:URIID", c.email)
-    a = party.address
-    addr = _sub(el, "ram:PostalTradeAddress")
+    _address(el, party.address)
+    if party.electronic_address:
+        _sub(_sub(el, "ram:URIUniversalCommunication"), "ram:URIID", party.electronic_address, schemeID="EM")
+    if party.vat_id:
+        _sub(_sub(el, "ram:SpecifiedTaxRegistration"), "ram:ID", party.vat_id, schemeID="VA")
+    if party.tax_number:
+        _sub(_sub(el, "ram:SpecifiedTaxRegistration"), "ram:ID", party.tax_number, schemeID="FC")
+
+
+def _address(parent: etree._Element, a: Address) -> None:
+    addr = _sub(parent, "ram:PostalTradeAddress")
     if a.postcode:
         _sub(addr, "ram:PostcodeCode", a.postcode)
     if a.line1:
@@ -82,12 +93,6 @@ def _party(parent: etree._Element, tag: str, party: Party, *, with_contact: bool
     if a.city:
         _sub(addr, "ram:CityName", a.city)
     _sub(addr, "ram:CountryID", a.country_code or "DE")
-    if party.electronic_address:
-        _sub(_sub(el, "ram:URIUniversalCommunication"), "ram:URIID", party.electronic_address, schemeID="EM")
-    if party.vat_id:
-        _sub(_sub(el, "ram:SpecifiedTaxRegistration"), "ram:ID", party.vat_id, schemeID="VA")
-    if party.tax_number:
-        _sub(_sub(el, "ram:SpecifiedTaxRegistration"), "ram:ID", party.tax_number, schemeID="FC")
 
 
 # BT-120 exemption reasons are required for non-standard categories.
@@ -106,6 +111,8 @@ def build_cii(invoice: Invoice, profile: Profile = "zugferd") -> bytes:
     root = etree.Element(_q("rsm:CrossIndustryInvoice"), nsmap=NS)
 
     ctx = _sub(root, "rsm:ExchangedDocumentContext")
+    if profile == "xrechnung":  # BT-23, mandatory in XRechnung (PEPPOL-EN16931-R001)
+        _sub(_sub(ctx, "ram:BusinessProcessSpecifiedDocumentContextParameter"), "ram:ID", BUSINESS_PROCESS_ID)
     _sub(_sub(ctx, "ram:GuidelineSpecifiedDocumentContextParameter"), "ram:ID", GUIDELINE_IDS[profile])
 
     doc = _sub(root, "rsm:ExchangedDocument")
@@ -149,6 +156,10 @@ def build_cii(invoice: Invoice, profile: Profile = "zugferd") -> bytes:
         _sub(_sub(agreement, "ram:BuyerOrderReferencedDocument"), "ram:IssuerAssignedID", invoice.order_reference)
 
     delivery = _sub(tx, "ram:ApplicableHeaderTradeDelivery")
+    if any(line.vat_category == "K" for line in invoice.lines):
+        # Deliver-to country (BT-80) is mandatory for intra-community supplies (BR-IC-12), XRechnung
+        # then also wants post code and city: the model has no delivery address, goods go to the buyer.
+        _address(_sub(delivery, "ram:ShipToTradeParty"), invoice.buyer.address)
     if invoice.delivery_date:
         _date(_sub(delivery, "ram:ActualDeliverySupplyChainEvent"), "ram:OccurrenceDateTime", invoice.delivery_date)
 

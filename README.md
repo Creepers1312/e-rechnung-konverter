@@ -312,9 +312,12 @@ backend/
   app/erp/                  ERP-Adapter-Schnittstelle + SAP ECC (INVOIC02)
   app/export/cii.py         CII-XML für ZUGFeRD und XRechnung
   app/export/zugferd.py     XML in PDF einbetten (factur-x) + XSD-Prüfung
+  app/schematron.py         Offizielle Prüfung (EN 16931 + XRechnung, Schematron via Saxon)
+  app/data/schematron/      Offizielle Regelwerke als XSLT (Version und Aktualisierung: README dort)
   app/export/pdf_render.py  Einfaches Rechnungs-PDF, wenn kein Quell-PDF existiert
-  app/validation.py         Pflichtfeld-, IBAN- und Summenprüfung
-  app/convert.py            Prüfen + Datei erzeugen (gemeinsam für API und Worker)
+  app/validation.py         Vorprüfung: Pflichtfelder, IBAN, Summen (deutsche Meldungen am Feld)
+  app/convert.py            Prüfen (Vorprüfung, XSD, Schematron, PDF/A) + Datei erzeugen (API und Worker)
+  app/pdfa.py               ZUGFeRD: PDF/A-3-Umwandlung und veraPDF-Prüfung über den PDF-Dienst
   app/db.py                 Archiv (PostgreSQL / SQLite) mit SQLAlchemy
   app/auth.py               Anmeldung, Sitzungen, Rollen, Schutz gegen Passwort-Raten
   app/admin.py              Endpunkte für Anmeldung und Verwaltung (/api/auth, /api/admin)
@@ -331,7 +334,7 @@ backend/
   app/manage.py             Kommandozeile: Admin anlegen, Passwort zurücksetzen
   app/main.py               FastAPI-Endpunkte (Umwandeln, Archiv)
 frontend/                   React + Vite + TypeScript (Start, Zu prüfen, Umwandeln, Archiv, Verwaltung)
-ocr/                        OCR-Dienst (FastAPI + OCRmyPDF/Tesseract, eigener Container)
+ocr/                        PDF-Dienst (FastAPI): OCR (OCRmyPDF/Tesseract), PDF/A-3 (Ghostscript), veraPDF
 compose.yaml                frontend, backend, worker, db, backup
 deploy.sh                   Installation & Update (Docker-Check, .env, Ordner, Start, Prüfung)
 deploy/                     Overlays: compose.https.yaml (Caddy), compose.proxy.yaml (vorhandener Proxy)
@@ -356,8 +359,8 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [x] Export ZUGFeRD (EN 16931) und XRechnung 3.0 (CII) inkl. XSD-Prüfung
 - [x] SAP ECC: INVOIC02-IDoc einlesen (Upload + Ordner-Adapter)
 - [x] Docker Compose: getrennte Dienste, Archiv in PostgreSQL, Worker für den IDoc-Eingang
-- [ ] Offizielle Prüfung mit dem **KoSIT-Validator** (Schematron, Java) einbinden
-- [ ] Echte **PDF/A-3**-Umwandlung (Ghostscript) + Prüfung mit veraPDF
+- [x] Offizielle Prüfung mit den **Schematron-Regeln** von CEN (EN 16931) und KoSIT (XRechnung) vor jeder Freigabe
+- [x] Echte **PDF/A-3**-Umwandlung (Ghostscript) + Prüfung der fertigen ZUGFeRD-Datei mit veraPDF
 - [ ] Versand der E-Rechnungen (E-Mail / PEPPOL) direkt aus dem Worker
 - [ ] Datenbank-Migrationen (Alembic) vor der ersten Schemaänderung
 - [ ] Rabatte und Zuschläge (Allowances/Charges), Teilzahlungen, Skonto

@@ -6,7 +6,7 @@ comments and identifiers are English.
 
 ## Stack (do not deviate without asking)
 
-- Backend: Python ≥ 3.11, FastAPI, pydantic v2, SQLAlchemy 2 (PostgreSQL via psycopg 3), argon2-cffi, pdfplumber, lxml, factur-x, reportlab. Tests: pytest.
+- Backend: Python ≥ 3.11, FastAPI, pydantic v2, SQLAlchemy 2 (PostgreSQL via psycopg 3), argon2-cffi, pdfplumber, lxml, factur-x, reportlab, saxonche (Schematron). Tests: pytest.
 - Frontend: React 18 + Vite + TypeScript (strict), pnpm. Plain CSS, no UI framework.
 
 ## Architecture (keep these)
@@ -40,7 +40,8 @@ comments and identifiers are English.
    both the API and the IDoc worker.
 7. **Deployment is Docker Compose** (`compose.yaml`): frontend (nginx, only
    published port), backend, worker (same image, `python -m app.worker`), db
-   (PostgreSQL), backup (`backup/backup.sh`, pg_dump), ocr (`ocr/`, OCRmyPDF).
+   (PostgreSQL), backup (`backup/backup.sh`, pg_dump), ocr (`ocr/`, PDF service:
+   OCRmyPDF OCR, PDF/A-3 conversion via Ghostscript, veraPDF check).
    Network `data` is internal: worker, db, backup and ocr have no internet. The
    IDoc, PDF and customer-master (`stammdaten`) inbox folders are mounted into worker (processing) and backend
    (admin status/retry).
@@ -49,9 +50,18 @@ comments and identifiers are English.
    namespaced by `COMPOSE_PROJECT_NAME` – never hard-code container, network,
    volume or image names (other stacks may share the host).
    Locally without Docker the backend falls back to SQLite.
-8. **Export only when valid**: export endpoints re-run validation and return 422
-   with the issues. CII element order follows the XSD — check `check_xsd` after
-   any change in `export/cii.py`.
+8. **Export only when valid**: `convert.convert` runs the pre-check
+   (`validation.py`), then `convert.check_xml` = XSD + the official Schematron
+   rules (`app/schematron.py`: EN 16931, plus KoSIT XRechnung for XRechnung;
+   vendored XSLT in `app/data/schematron/`). Any error → `NotExportable` (422 in
+   the API, review item in the worker); if Schematron cannot run, it fails closed.
+   Saxon runs in a helper process – never call `saxonche` from a request thread.
+   ZUGFeRD additionally: PDF → PDF/A-3b (ocr `/pdfa`) → embed XML → veraPDF
+   (`/verify`) on the finished file (`app/pdfa.py`); active whenever `OCR_URL` is
+   set (`PDFA_CHECK=off` disables), fails closed when the service is down.
+   After any change in `export/cii.py` run `tests/test_schematron.py`; CII element
+   order follows the XSD. When the official rules catch something new, also add a
+   German pre-check with a `field` in `validation.py` so the form can mark it.
 9. **Every endpoint is behind login** (`app/auth.py`): `current_user` for
    normal work, `require_admin` for users/settings/audit (`app/admin.py`).
    New endpoints must take one of these dependencies; only `/api/health` and
@@ -92,5 +102,5 @@ cd ocr && pytest        # needs tesseract (+ deu) and ocrmypdf
 
 ## Not yet (see README roadmap)
 
-KoSIT Schematron validation, strict PDF/A-3 conversion, sending (e-mail/PEPPOL),
+Sending (e-mail/PEPPOL),
 Alembic migrations, e-mail inbox, allowances/charges, SSO (Entra ID), multi-tenancy.

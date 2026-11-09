@@ -1,8 +1,9 @@
 """Business-rule checks run before export.
 
 These cover the EN 16931 / XRechnung rules that typically fail when data comes
-from a PDF. They are a fast pre-check for the review form, not a replacement
-for the official KoSIT validator (see README, "Roadmap").
+from a PDF. They are a fast pre-check with German messages tied to form fields; the
+official Schematron rules run on the generated XML afterwards (`schematron.py`,
+`convert.check_xml`).
 """
 
 from __future__ import annotations
@@ -93,6 +94,12 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
 
     if any(line.vat_category == "S" for line in invoice.lines) and not (s.vat_id or s.tax_number):
         err("BR-S-02", "seller.vat_id", "USt-IdNr. oder Steuernummer des Verkäufers fehlt.")
+    elif not s.vat_id:  # the tax number (BT-32) does not identify the seller in EN 16931
+        err(
+            "BR-CO-26",
+            "seller.vat_id",
+            "USt-IdNr. des Verkäufers fehlt – die Steuernummer allein reicht für eine E-Rechnung nicht.",
+        )
     if any(line.vat_category in ("AE", "K") for line in invoice.lines) and not b.vat_id:
         err(
             "BR-AE-02",
@@ -110,6 +117,8 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
         err("IBAN", "payment.iban", "IBAN-Prüfsumme ist ungültig.")
 
     if profile == "xrechnung":
+        if not (pay.iban or pay.means_code):
+            err("BR-DE-1", "payment.iban", "XRechnung: Zahlungsangaben fehlen (z. B. IBAN für Überweisung).")
         if not invoice.buyer_reference.strip():
             err("BR-DE-15", "buyer_reference", "XRechnung: Käuferreferenz / Leitweg-ID (BT-10) fehlt.")
         c = s.contact

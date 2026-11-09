@@ -12,13 +12,13 @@ Der Konverter erzeugt E-Rechnungen nach **EN 16931** aus drei Quellen:
 | SAP ECC | INVOIC02-IDoc (XML) per Upload oder IDoc-Eingangsordner | strukturiert, keine Texterkennung |
 | Manuell | Formular in der Weboberfläche | – |
 
-Ausgabeformate: **ZUGFeRD / Factur-X** (PDF/A-3 mit eingebettetem CII-XML, Profil EN 16931) und **XRechnung 3.0** (CII-XML).
+Ausgabeformate: **ZUGFeRD / Factur-X** (PDF/A-3b mit eingebettetem CII-XML, Profil EN 16931, mit veraPDF geprüft) und **XRechnung 3.0** (CII-XML).
 
 Grundsätze der Verarbeitung:
 
 1. **Ein neutrales Rechnungsmodell.** Jede Quelle erzeugt dasselbe Modell, jede Ausgabe liest es. Quellen und Ausgaben kennen sich nicht.
 2. **Summen werden immer berechnet**, nie aus der Quelle übernommen. Aufgedruckte Summen dienen nur zum Abgleich.
-3. **Export nur, wenn gültig.** Vor jedem Export läuft die Prüfung (EN-16931-Geschäftsregeln, XRechnung-Regeln, XSD).
+3. **Export nur, wenn gültig.** Vor jedem Export läuft die Prüfung in drei Stufen: Vorprüfung am Formular, XSD-Schema und die offiziellen Schematron-Regeln (EN 16931, bei XRechnung zusätzlich KoSIT). Schlägt eine Stufe fehl, wird nichts freigegeben.
 4. **Automatik zuerst, Prüfung danach.** Gültige Eingänge werden ohne Klick umgewandelt; unvollständige landen in „Zu prüfen“, nie stillschweigend im Fehlerordner.
 
 ## Architektur und Dienste
@@ -31,7 +31,7 @@ Die Anwendung läuft als Docker-Compose-Stack. Jeder Dienst hat einen eigenen Co
 | `backend` | FastAPI: Erkennung, Prüfung, Export, Archiv, Verwaltung | web, data | nein |
 | `worker` | überwacht die Eingangsordner, wandelt automatisch um, importiert den Kundenstamm | data | nein, ohne Internet |
 | `db` | PostgreSQL: Archiv, Benutzer, Einstellungen, Protokoll | data | nein, ohne Internet |
-| `ocr` | Texterkennung für Scans (OCRmyPDF/Tesseract, Deutsch + Englisch) | data | nein, ohne Internet |
+| `ocr` | PDF-Dienst: Texterkennung für Scans (OCRmyPDF/Tesseract, Deutsch + Englisch), PDF/A-3-Umwandlung (Ghostscript) und PDF/A-Prüfung (veraPDF) | data | nein, ohne Internet |
 | `backup` | tägliche Datenbanksicherung (`pg_dump`) | data | nein, ohne Internet |
 
 ```
@@ -107,24 +107,28 @@ Mit **„SAP-Stammdaten haben Vorrang“** (Standard) überschreiben die Stammda
 
 `PDF_HOST_DIR/inbox` (Standard `data/pdf/inbox`). Gültige Rechnungen werden automatisch erzeugt (`outbox/` + Archiv), unvollständige gehen nach „Zu prüfen“, das Original nach `processed/`. Mit ausgeschalteter Vollautomatik geht jede PDF-Rechnung zur Freigabe („Vier-Augen-Prinzip“).
 
-### OCR-Dienst (intern)
+### PDF-Dienst `ocr` (intern)
 
 | Endpunkt | Beschreibung |
 |---|---|
-| `GET /health` | Status und installierte Sprachen |
+| `GET /health` | Status, installierte Sprachen und veraPDF (503, wenn etwas fehlt) |
 | `POST /ocr` | PDF hochladen (multipart, Feld `file`), Antwort: PDF mit Textebene. Optional `pages` = `all` oder `1,3`: diese Seiten werden auch dann erkannt, wenn sie schon eine Textebene haben |
+| `POST /pdfa` | PDF hochladen, Antwort: PDF/A-3b (Ghostscript bettet die Schriften ein und setzt ein sRGB-Farbprofil; keine Texterkennung, das Aussehen bleibt) |
+| `POST /verify` | PDF hochladen, optional `flavour` (Standard `3b`), Antwort: `compliant` und die verletzten Regeln von ISO 19005 (veraPDF) |
 
 **Wann wird erkannt?** Pro Seite (`PdfText.scan_pages`): Seiten ohne Text, und Seiten, die überwiegend aus einem Bild bestehen und nur wenig oder unleserlichen Text tragen (Scanner-Stempel, schlechte Scanner-Texterkennung). Digitale Seiten bleiben unverändert. Im Editor erzwingt „Texterkennung erzwingen“ die Erkennung aller Seiten; für den PDF-Eingang gibt es dafür die Einstellung „Jede Seite per Texterkennung lesen“.
 
-Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der Dienst nicht erreichbar, werden Scans in „Zu prüfen“ gelegt statt verworfen.
+Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der Dienst nicht erreichbar, werden Scans in „Zu prüfen“ gelegt statt verworfen – und es wird keine ZUGFeRD-Datei freigegeben (siehe „Prüfung vor der Freigabe“).
+
+veraPDF (Java, Version und Prüfsumme in `ocr/install_verapdf.py`) wird beim Bauen des Images installiert und läuft als eigenes Programm (Lizenz GPL 3 / MPL 2).
 
 ## Systemfunktionen
 
 | Funktion | Beschreibung | Technik |
 |---|---|---|
 | Erkennung | Felder aus PDF-Text per Regeln; neue Layouts = neue YAML-Datei, kein Code. Vorlagen für die Layouts von Rheinfelden Carbon, Alloys (Preis / 1000 KG) und Semis (englisch, Preis / 100 KG, steuerfreie Ausfuhr). OCR-Lesefehler bei Dezimalzeichen („2.640.00“) werden über die aufgedruckten Summen aufgelöst | `app/extraction/`, Vorlagen in `templates/` |
-| Prüfung | EN-16931-Pflichtfelder, Summen, XRechnung-Regeln (z. B. BR-DE-15 Leitweg-ID), XSD | `app/validation.py`, `export/zugferd.py` |
-| Export | CII-XML; für ZUGFeRD in PDF/A-3 eingebettet | `app/export/`, `app/convert.py` |
+| Prüfung | Vorprüfung (Pflichtfelder, Summen, z. B. BR-DE-15 Leitweg-ID), XSD, offizielle Schematron-Regeln | `app/validation.py`, `export/zugferd.py`, `app/schematron.py` |
+| Export | CII-XML; für ZUGFeRD in PDF/A-3b eingebettet (Umwandlung und veraPDF-Prüfung im PDF-Dienst) | `app/export/`, `app/convert.py`, `app/pdfa.py` |
 | Archiv | jede erzeugte Rechnung samt Datei in der Datenbank; Suche, ZIP-Download | Tabelle `documents` |
 | Zu prüfen | Prüfliste für unvollständige automatische Eingänge, Original bleibt gespeichert | Tabelle `review_items` |
 | Mehrere Firmen | bis zu 10 eigene Firmen (Rechnungssteller); Zuordnung eines Dokuments über USt-IdNr., Steuernummer, IBAN, Erkennungsmerkmale, Name; IDocs über `EIGENUINR` | Einstellung `companies`, `app/settings.py`, `app/recognize.py` |
@@ -134,6 +138,27 @@ Nur im internen Netz erreichbar (`OCR_URL`, Standard `http://ocr:8000`). Ist der
 | Benutzer & Rollen | Benutzer/Administrator, Sperren, Passwort zurücksetzen | Tabellen `users`, `sessions` |
 | Protokoll | Anmeldungen, Fehlversuche, Exporte, Downloads, Änderungen | Tabelle `audit_log` |
 | Einstellungen | Firmendaten, Eingänge, Kundenstamm-Import | Tabelle `settings` |
+
+### Prüfung vor der Freigabe
+
+Eine E-Rechnung wird nur erzeugt, wenn alle Stufen bestanden sind – beim Export aus der Oberfläche genauso wie im automatischen Eingang (`app/convert.py`):
+
+1. **Vorprüfung** am Rechnungsmodell (`app/validation.py`): Pflichtfelder, IBAN, Summen gegen den Beleg. Die Meldungen sind deutsch und markieren das betroffene Feld im Formular.
+2. **XSD-Schema** des erzeugten CII-XML (Factur-X, Profil EN 16931).
+3. **Offizielle Schematron-Regeln** (`app/schematron.py`) – dieselben Regeln, die der KoSIT-Validator und die Empfänger anwenden:
+
+| Ausgabe | Regelwerke |
+|---|---|
+| ZUGFeRD / Factur-X | EN 16931 (CEN, CII) |
+| XRechnung | EN 16931 (CEN, CII) + XRechnung (KoSIT, CII) |
+
+4. **Nur ZUGFeRD: PDF/A-3** (`app/pdfa.py`). Das sichtbare PDF – das Original oder ein erzeugtes – wird im PDF-Dienst nach PDF/A-3b umgewandelt, *dann* wird das XML eingebettet, und die **fertige Datei** wird mit veraPDF gegen PDF/A-3b geprüft. Geprüft wird bewusst nach dem Einbetten, weil gerade das Einbetten die Konformität verletzen kann (z. B. digital signierte Originale). Meldungen: `PDFA-<Abschnitt>-<Test>` mit dem Regeltext aus ISO 19005-3. Lässt sich ein Original nicht umwandeln, bleibt als Ausweg die XRechnung.
+
+Fehler (`fatal`/`error`) verhindern die Freigabe: Beim Export erscheinen sie in der Fehlerliste, im automatischen Eingang landet die Rechnung in „Zu prüfen“. Warnungen werden angezeigt, blockieren aber nicht. Meldungen der Regelwerke beginnen mit „Offizielle Prüfung …“ und tragen die Regelnummer (z. B. `BR-CO-26`); die EN-16931-Texte sind englisch, die XRechnung-Texte deutsch.
+
+Die Regelwerke liegen als XSLT im Image (`backend/app/data/schematron/`, Versionen und Aktualisierung in der README dort) – der Worker braucht dafür kein Internet. Sie laufen mit Saxon (`saxonche`) in einem Hilfsprozess. Kann die Prüfung nicht laufen, gilt die Rechnung als nicht geprüft und wird **nicht** freigegeben (Meldung `SCHEMATRON`).
+
+Dasselbe gilt für PDF/A: Ist der PDF-Dienst nicht erreichbar, wird keine ZUGFeRD-Datei freigegeben (Meldung `PDFA`; im automatischen Eingang landet die Rechnung in „Zu prüfen“ und kann später erneut erzeugt werden). Die PDF/A-Stufe ist aktiv, sobald `OCR_URL` gesetzt ist (in Docker Compose immer); `PDFA_CHECK=off` schaltet sie ab – nur für Tests gedacht. Umwandeln und Prüfen dauern zusammen einige Sekunden je Rechnung.
 
 ### Datenbank
 
@@ -196,7 +221,8 @@ Alle Werte stehen in `.env` (Vorlage `.env.example`). Firmendaten und Eingangs-E
 | `IDOC_HOST_DIR`, `PDF_HOST_DIR`, `STAMMDATEN_HOST_DIR` | Eingangsordner auf dem Host | `./data/…` |
 | `IDOC_PROFILE`, `IDOC_INTERVAL` | Startwerte für Format und Abfrageintervall | `zugferd`, `10` |
 | `BACKUP_HOST_DIR`, `BACKUP_TIME`, `BACKUP_KEEP_DAYS` | Sicherungen | `./backups`, `02:30`, `14` |
-| `OCR_LANG`, `OCR_PARALLEL` | Sprachen und parallele Dokumente der Texterkennung | `deu+eng`, `2` |
+| `OCR_LANG`, `OCR_PARALLEL` | Sprachen und parallele Dokumente des PDF-Dienstes (Texterkennung, PDF/A) | `deu+eng`, `2` |
+| `PDFA_CHECK` | ZUGFeRD nach PDF/A-3 umwandeln und mit veraPDF prüfen (`off` nur für Tests) | `on` |
 | `STATS_TZ` | Zeitzone der Kennzahlen auf der Startseite | `Europe/Berlin` |
 
 ## Betrieb
