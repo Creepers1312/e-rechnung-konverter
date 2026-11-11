@@ -89,10 +89,7 @@ button.icon { background: none; border: 0; color: var(--muted); font-size: 1.2re
 }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; padding: 0 8px 22px; }
 .brand small { display: block; font-weight: 400; color: var(--sidebar-text); font-size: 0.8rem; }
-.logo {
-  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px;
-  background: #2f6fd6; color: #fff; font-size: 1.2rem;
-}
+.logo { display: block; flex: none; width: 36px; height: 36px; }
 .sidebar nav { display: grid; gap: 2px; }
 .sidebar nav a {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
