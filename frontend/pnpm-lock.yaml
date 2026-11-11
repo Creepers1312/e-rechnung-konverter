@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/ibm-plex-mono':
+        specifier: 5.1.1
+        version: 5.1.1
+      '@fontsource/ibm-plex-sans':
+        specifier: 5.1.1
+        version: 5.1.1
       marked:
         specifier: 14.1.4
         version: 14.1.4
@@ -259,6 +265,12 @@ packages:
     engines: {node: '>=12'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource/ibm-plex-mono@5.1.1':
+    resolution: {integrity: sha512-1aayqPe/ZkD3MlvqpmOHecfA3f2B8g+fAEkgvcCd3lkPP0pS1T0xG5Zmn2EsJQqr1JURtugPUH+5NqvKyfFZMQ==}
+
+  '@fontsource/ibm-plex-sans@5.1.1':
+    resolution: {integrity: sha512-s6xHuHCYxZbIZV0Qchw+EoucPYWCP3PgLs9+oF3u1kLQKwabWaUC3Fm30y6n3VIMCqR89dpkcS8LTqH/IGTDDQ==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -859,6 +871,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.21.5':
     optional: true
+
+  '@fontsource/ibm-plex-mono@5.1.1': {}
+
+  '@fontsource/ibm-plex-sans@5.1.1': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
