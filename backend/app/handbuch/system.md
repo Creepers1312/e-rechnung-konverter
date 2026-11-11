@@ -129,7 +129,8 @@ veraPDF (Java, Version und Prüfsumme in `ocr/install_verapdf.py`) wird beim Bau
 | Erkennung | Felder aus PDF-Text per Regeln; neue Layouts = neue YAML-Datei, kein Code. Vorlagen für die Layouts von Rheinfelden Carbon, Alloys (Preis / 1000 KG) und Semis (englisch, Preis / 100 KG, steuerfreie Ausfuhr). OCR-Lesefehler bei Dezimalzeichen („2.640.00“) werden über die aufgedruckten Summen aufgelöst | `app/extraction/`, Vorlagen in `templates/` |
 | Prüfung | Vorprüfung (Pflichtfelder, Summen, z. B. BR-DE-15 Leitweg-ID), XSD, offizielle Schematron-Regeln | `app/validation.py`, `export/zugferd.py`, `app/schematron.py` |
 | Export | CII-XML; für ZUGFeRD in PDF/A-3b eingebettet (Umwandlung und veraPDF-Prüfung im PDF-Dienst) | `app/export/`, `app/convert.py`, `app/pdfa.py` |
-| Archiv | jede erzeugte Rechnung samt Datei in der Datenbank; Suche, ZIP-Download | Tabelle `documents` |
+| Archiv | jede erzeugte Rechnung samt Datei in der Datenbank; Suche (Rechnungsnummer, Käufer, eigene Firma), Filter nach Zeitraum, Firma, Format, Quelle; ZIP-Download | Tabelle `documents` (Spalte `seller_name` = ausstellende Firma) |
+| Länder | ISO-3166-Kürzel mit Namen in elf Sprachen: Länderauswahl im Formular, Erkennung gedruckter Ländernamen („COSTA RICA“), Auslandsanschriften ohne PLZ | `app/countries.py`, `app/data/countries.json`, `GET /api/countries` |
 | Zu prüfen | Prüfliste für unvollständige automatische Eingänge, Original bleibt gespeichert | Tabelle `review_items` |
 | Mehrere Firmen | bis zu 10 eigene Firmen (Rechnungssteller); Zuordnung eines Dokuments über USt-IdNr., Steuernummer, IBAN, Erkennungsmerkmale, Name; IDocs über `EIGENUINR` | Einstellung `companies`, `app/settings.py`, `app/recognize.py` |
 | Feldverknüpfungen | Wert im PDF anklicken → Formularfeld; je Firma gespeichert und bei den nächsten Rechnungen angewendet (Bezug: Beschriftung neben/über dem Wert) | Tabelle `field_links`, `app/field_links.py` |
@@ -164,7 +165,7 @@ Dasselbe gilt für PDF/A: Ist der PDF-Dienst nicht erreichbar, wird keine ZUGFeR
 
 | Tabelle | Inhalt |
 |---|---|
-| `documents` | erzeugte E-Rechnungen (Metadaten, Rechnung als JSON, Datei) |
+| `documents` | erzeugte E-Rechnungen (Metadaten inkl. ausstellender Firma, Rechnung als JSON, Datei) |
 | `review_items` | Einträge in „Zu prüfen“ inkl. Fehlern und Original-PDF |
 | `field_links` | Feldverknüpfungen je Firma: Feld, Seite, Rahmen in PDF-Punkten, Bezugsbeschriftung, Beispielwert |
 | `customers` | Käufer-Adressbuch und SAP-Kundenstamm (`source` = `sap` / `rechnung`) |

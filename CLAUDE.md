@@ -79,7 +79,9 @@ comments and identifiers are English.
     inbox files that pass validation are converted without user action; files
     with validation errors become review items ("Zu prüfen"), never silent
     failures. Only unreadable files go to `error/`. Scans go through
-    `ocr.text_of_pdf` (OCR service) before recognition.
+    `ocr.text_of_pdf` (OCR service) before recognition – decided **per page**
+    (`PdfText.scan_pages`: no text, or image-dominated with sparse/garbled text);
+    only those pages are sent (`pages=` on the service, `force` = all pages).
 12. **Recognition rules must not cross lines**: use `{SEP}` between a label and
     its value in templates. Placeholders (`{AMOUNT}`, `{DATE}`, `{NUMBER}`,
     `{SEP}`) are wrapped in groups by the engine. Multi-line items use
@@ -91,6 +93,12 @@ comments and identifiers are English.
     Every new `/api` endpoint needs a German entry in `docs.DESCRIPTIONS`
     (a test enforces it). Screenshots only with invented demo data
     (`backend/scripts/demo_data.py`, `frontend/scripts/screenshots.mjs`).
+
+14. **Countries** (`app/countries.py`, `app/data/countries.json`, ISO 3166 with
+    names in eleven languages): used for the country picker (`/api/countries`),
+    printed country names and foreign buyer addresses. `.gitignore` ignores only
+    the runtime folders `/data/` and `/backend/data/` – keep `backend/app/data/`
+    in git.
 
 ## Commands
 
