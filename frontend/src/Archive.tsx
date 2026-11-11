@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { documentUrl, downloadZip, listDocuments } from "./api";
+import { documentUrl, downloadZip, listCompanies, listDocuments } from "./api";
 import type { DocumentFilter, DocumentPage } from "./types";
 import { describe, download, eur, fmtDateTime } from "./util";
 
@@ -8,12 +8,26 @@ const PAGE_SIZE = 25;
 
 /** Every generated e-invoice (UI exports and the SAP inbox worker), newest first, searchable. */
 export function Archive({ refreshKey }: { refreshKey: number }) {
-  const [filter, setFilter] = useState<DocumentFilter>({ q: "", date_from: "", date_to: "", profile: "", source: "" });
+  const [filter, setFilter] = useState<DocumentFilter>({
+    q: "",
+    date_from: "",
+    date_to: "",
+    profile: "",
+    source: "",
+    seller: "",
+  });
+  const [companies, setCompanies] = useState<string[]>([]);
   const [query, setQuery] = useState(""); // search box, applied debounced
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<DocumentPage | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    listCompanies()
+      .then((cs) => setCompanies(cs.map((c) => c.seller.name).filter(Boolean)))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -45,7 +59,9 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
     });
   const items = page?.items ?? [];
   const allOnPage = items.length > 0 && items.every((d) => selected.has(d.id));
-  const filtered = Boolean(filter.q || filter.date_from || filter.date_to || filter.profile || filter.source);
+  const filtered = Boolean(
+    filter.q || filter.date_from || filter.date_to || filter.profile || filter.source || filter.seller,
+  );
 
   return (
     <section className="archive">
@@ -56,7 +72,7 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
 
       <div className="filters">
         <label className="field grow">
-          <span>Suche (Rechnungsnummer oder Käufer)</span>
+          <span>Suche (Rechnungsnummer, Käufer oder Firma)</span>
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="z. B. RE-2026 oder Kunde AG" />
         </label>
         <label className="field">
@@ -67,6 +83,19 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
           <span>Bis</span>
           <input type="date" value={filter.date_to} onChange={(e) => set({ date_to: e.target.value })} />
         </label>
+        {companies.length > 1 && (
+          <label className="field">
+            <span>Firma</span>
+            <select value={filter.seller} onChange={(e) => set({ seller: e.target.value })}>
+              <option value="">Alle</option>
+              {companies.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
           <span>Format</span>
           <select value={filter.profile} onChange={(e) => set({ profile: e.target.value as DocumentFilter["profile"] })}>
@@ -115,6 +144,7 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
                 </th>
                 <th>Erstellt</th>
                 <th>Rechnung</th>
+                <th>Firma</th>
                 <th>Käufer</th>
                 <th className="right">Brutto</th>
                 <th>Format</th>
@@ -131,6 +161,7 @@ export function Archive({ refreshKey }: { refreshKey: number }) {
                   </td>
                   <td>{fmtDateTime(d.created_at)}</td>
                   <td>{d.invoice_number}</td>
+                  <td>{d.seller_name || "–"}</td>
                   <td>{d.buyer_name}</td>
                   <td className="right">{eur(d.grand_total, d.currency)}</td>
                   <td>{d.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD"}</td>

@@ -53,6 +53,7 @@ class Document(Base):
     source_name: Mapped[str] = mapped_column(String(255), default="")
     profile: Mapped[str] = mapped_column(String(20))  # "zugferd" | "xrechnung"
     invoice_number: Mapped[str] = mapped_column(String(100), index=True)
+    seller_name: Mapped[str] = mapped_column(String(255), default="", index=True)  # own company (issuer)
     buyer_name: Mapped[str] = mapped_column(String(255), default="")
     grand_total: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     currency: Mapped[str] = mapped_column(String(3))
@@ -209,6 +210,14 @@ def _upgrade(conn: Connection) -> None:
     columns = {c["name"] for c in inspect(conn).get_columns("documents")}
     if "created_by" not in columns:
         conn.execute(text("ALTER TABLE documents ADD COLUMN created_by VARCHAR(100) NOT NULL DEFAULT ''"))
+    if "seller_name" not in columns:
+        conn.execute(text("ALTER TABLE documents ADD COLUMN seller_name VARCHAR(255) NOT NULL DEFAULT ''"))
+        # fill in the issuing company of existing archive entries from the stored invoice
+        docs = Document.__table__
+        for doc_id, inv in conn.execute(select(docs.c.id, docs.c.invoice)).all():
+            name = ((inv or {}).get("seller") or {}).get("name") or ""
+            if name:
+                conn.execute(docs.update().where(docs.c.id == doc_id).values(seller_name=name[:255]))
     columns = {c["name"] for c in inspect(conn).get_columns("customers")}
     if "source" not in columns:
         conn.execute(text("ALTER TABLE customers ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'rechnung'"))
@@ -240,6 +249,7 @@ def archive(
         profile=profile,
         invoice_number=invoice.number,
         buyer_name=invoice.buyer.name[:255],
+        seller_name=invoice.seller.name[:255],
         grand_total=compute_totals(invoice).grand_total,
         currency=invoice.currency,
         invoice=invoice.model_dump(mode="json"),
@@ -261,10 +271,11 @@ def search_documents(
     date_to: date | None = None,
     profile: str | None = None,
     source: str | None = None,
+    seller: str | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[Document], int]:
-    """Archive search, newest first. `query` matches invoice number or buyer (case-insensitive)."""
+    """Archive search, newest first. `query` matches invoice number, buyer or own company (case-insensitive)."""
     conditions = []
     if query.strip():
         term = query.strip().lower()
@@ -272,6 +283,7 @@ def search_documents(
             or_(
                 func.lower(Document.invoice_number).contains(term, autoescape=True),
                 func.lower(Document.buyer_name).contains(term, autoescape=True),
+                func.lower(Document.seller_name).contains(term, autoescape=True),
             )
         )
     if date_from:
@@ -282,6 +294,8 @@ def search_documents(
         conditions.append(Document.profile == profile)
     if source:
         conditions.append(Document.source == source)
+    if seller:
+        conditions.append(Document.seller_name == seller)
     total = session.scalar(select(func.count()).select_from(Document).where(*conditions)) or 0
     stmt = (
         select(Document)

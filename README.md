@@ -23,8 +23,14 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
 
 **Erkennung**
 
-- **OCR-Dienst** (eigener Container, OCRmyPDF/Tesseract, Deutsch + Englisch): gescannte PDFs
-  ohne Textebene werden automatisch erkannt; die Daten verlassen den Server nicht.
+- **OCR-Dienst** (eigener Container, OCRmyPDF/Tesseract, Deutsch + Englisch): gescannte Seiten
+  werden automatisch erkannt – Seite für Seite, auch mit Scanner-Stempel oder schlechter
+  Scanner-Textebene; „Texterkennung erzwingen“ im Editor. Die Daten verlassen den Server nicht.
+- **Vorlagen für die drei eigenen Firmen** (Rheinfelden Carbon, Alloys, Semis – auch englisch),
+  **Preis je 100/1000 kg** (Spalte „je“, BT-149, auch aus SAP `PEINH`), **steuerfreie Ausfuhr /
+  innergemeinschaftliche Lieferung**, per OCR verdrehte Dezimalzeichen („2.640.00“).
+- **Auslandsanschriften** ohne deutsche PLZ-Zeile (z. B. Costa Rica) über die Länderzeile;
+  **Länderauswahl** mit Kürzel und Namen.
 - Kombinierte Felder („Rechnungs-Nr. / Datum“, „Lieferschein-Nr. / Datum“), Summen wie
   „Nettosumme / MwSt. Total / Zu zahlender Gesamtbetrag“, Positionen über mehrere Zeilen,
   Artikel-/Materialnummer (BT-155), Einheit Tonne, **Fälligkeit aus „30 Tage netto“**.
@@ -43,7 +49,8 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
   E-Rechnungs-Adresse oder Leitweg-ID, werden sie automatisch ergänzt – auch beim
   SAP-Worker. Vorhandene Werte werden nie überschrieben. Manuelle Suche über
   „Aus Adressbuch übernehmen“ im Käufer-Bereich.
-- **Mehrere eigene Firmen:** bis zu 10 Rechnungssteller (Verwaltung → Firmen); jede Rechnung
+- **Mehrere eigene Firmen:** bis zu 10 Rechnungssteller (Verwaltung → Firmen, Karten mit
+  Bearbeiten im Fenster und Hinweisen auf fehlende/vertauschte Angaben); jede Rechnung
   wird automatisch der richtigen Firma zugeordnet (USt-IdNr., IBAN, Name; IDocs über die eigene
   USt-IdNr.), im Editor umschaltbar.
 - **Felder im PDF zuordnen:** Wert in der PDF-Vorschau anklicken, dann das Formularfeld – die
@@ -58,8 +65,10 @@ und ergänzen → Pflichtfelder und Summen werden laufend geprüft → herunterl
 - **Kundenstamm aus SAP:** Kundendaten (Anschrift, USt-IdNr., E-Rechnungs-Adresse,
   Leitweg-ID) kommen täglich als CSV aus SAP und müssen nicht von Hand gepflegt werden –
   siehe „SAP ECC → Kundenstamm“.
-- **Archiv-Suche:** nach Rechnungsnummer/Käufer, Zeitraum, Format und Quelle; Blättern;
-  mehrere Einträge als ZIP herunterladen.
+- **Archiv-Suche:** nach Rechnungsnummer, Käufer oder eigener Firma; Filter nach Zeitraum,
+  Firma, Format und Quelle; Blättern; mehrere Einträge als ZIP herunterladen.
+- **Positionen mit Summen:** „Gesamt netto“ je Position und Summenzeile (netto, Steuer,
+  brutto) mit Abgleich gegen das PDF; neben der PDF-Vorschau als kompakte Karten.
 - **SAP-Eingang (Admin):** Status des Workers, Dateien je Ordner, fehlgeschlagene IDocs
   mit Fehlergrund und „Erneut verarbeiten“.
 - **Automatische Datenbank-Backups** (siehe „Backup & Wiederherstellung“).
@@ -328,7 +337,9 @@ backend/
   app/recognize.py          Firma erkennen + Regeln + Feldverknüpfungen
   app/field_links.py        Feldverknüpfungen (Klick im PDF -> Formularfeld), je Firma
   app/docs.py, app/handbuch/  Anwenderhandbuch + Systemdokumentation (Markdown, Screenshots)
-  app/ocr.py                Anbindung des OCR-Dienstes (Scans ohne Textebene)
+  app/ocr.py                Anbindung des OCR-Dienstes (gescannte Seiten erkennen, Texterkennung erzwingen)
+  app/countries.py          Länderliste (app/data/countries.json): Auswahl + Erkennung von Ländernamen
+  app/companies_api.py      Eigene Firmen, Wörter mit Position (PDF-Vorschau), Feldverknüpfungen
   app/review.py             Prüfliste „Zu prüfen“
   app/worker.py             SAP-IDoc- und PDF-Eingang -> E-Rechnungen oder Prüfliste
   app/manage.py             Kommandozeile: Admin anlegen, Passwort zurücksetzen
@@ -367,6 +378,9 @@ scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 - [x] Anmeldung mit Rollen (Admin / Benutzer), Protokoll
 - [x] Stapelverarbeitung, PDF-Vorschau, Käufer-Adressbuch, Archiv-Suche, SAP-Eingang-Status, Backups
 - [x] OCR für Scans, PDF-Eingangsordner, Prüfliste „Zu prüfen“, neue Oberfläche
+- [x] Kundenstamm aus SAP (CSV), Kennzahlen-Startseite, Anwender- und Systemdoku in der App
+- [x] Mehrere eigene Firmen, Felder im PDF zuordnen, Vorlagen für alle drei Firmen, Preis je 100/1000 kg
+- [x] Texterkennung pro Seite, Länderauswahl, Auslandsanschriften, Firma im Archiv
 - [ ] E-Mail-Eingang (Rechnungen per Mail an ein Postfach)
 - [ ] Firmen-Login (Microsoft Entra ID / SSO), Mandanten
 - [ ] GoBD-konforme Archivierung (das Archiv ist bisher eine einfache Ablage)

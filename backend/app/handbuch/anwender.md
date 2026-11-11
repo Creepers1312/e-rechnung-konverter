@@ -68,7 +68,7 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 
 - **Gescannte PDFs** werden automatisch per Texterkennung gelesen – Seite für Seite, auch wenn der Scanner einen Stempel oder eine eigene (schlechte) Textebene eingefügt hat. Prüfen Sie hier Zahlen und Namen besonders genau.
 - **Text falsch oder gar nicht gelesen?** Oben auf **„Texterkennung erzwingen“** klicken: Das PDF wird komplett neu per Texterkennung gelesen (Änderungen im Formular gehen dabei verloren).
-- **Summen** rechnet die App immer selbst nach. Weichen sie von den Beträgen auf dem PDF ab, erscheint eine Warnung.
+- **Summen** rechnet die App immer selbst nach: Jede Position zeigt ihren Betrag in der Spalte **„Gesamt netto“**, darunter stehen **Summe netto**, die Steuer je Satz (bzw. z. B. „Ausfuhr (steuerfrei)“) und der **Gesamtbetrag brutto**. „✓ wie PDF“ heißt: stimmt mit der Rechnung überein; „≠ PDF …“ zeigt den abweichenden Betrag aus dem PDF – dann bitte die Positionen prüfen.
 - **Käuferdaten** wie E-Rechnungs-Adresse oder Leitweg-ID werden aus dem Kundenstamm (SAP) bzw. aus früheren Rechnungen ergänzt. Unter „Käufer“ können Sie über **„Aus Adressbuch übernehmen“** auch selbst suchen.
 - **Preis je 100 kg / 1000 kg:** Steht der Preis pro 100 oder 1000 Einheiten auf der Rechnung, trägt die App das in der Spalte **„je“** der Positionen ein und rechnet den Positionsbetrag entsprechend.
 - **Steuerfreie Lieferungen:** Steht „tax free export“, „steuerfreie Ausfuhr“ oder „innergemeinschaftliche Lieferung“ auf der Rechnung und ist keine Umsatzsteuer ausgewiesen, werden die Positionen automatisch steuerfrei gesetzt.
@@ -114,7 +114,7 @@ Jede erzeugte E-Rechnung wird im Archiv gespeichert – egal ob von Hand oder au
 
 ![Archiv](img/archiv.png)
 
-- **Suche** nach Rechnungsnummer oder Käufer, Filter nach **Zeitraum**, **Format** und **Quelle**.
+- **Suche** nach Rechnungsnummer, Käufer oder eigener Firma, Filter nach **Zeitraum**, **Firma**, **Format** und **Quelle**. Die Spalte **„Firma“** zeigt, welche eigene Firma die Rechnung ausgestellt hat.
 - **Herunterladen** lädt die E-Rechnung erneut herunter.
 - Mehrere Einträge per Häkchen auswählen und gemeinsam als **ZIP** herunterladen.
 - In der Spalte **„Von“** steht, wer die Rechnung erzeugt hat („worker“ = automatisch).
