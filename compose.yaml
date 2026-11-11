@@ -5,7 +5,8 @@
 #   worker    SAP-IDoc + PDF inbox -> e-invoices        (no internet access)
 #   db        PostgreSQL archive of all e-invoices      (internal only)
 #   backup    daily pg_dump of the database             (no internet access)
-#   ocr       OCRmyPDF/Tesseract for scanned PDFs       (no internet access)
+#   ocr       PDF service: OCR for scans (Tesseract),   (no internet access)
+#             PDF/A-3 conversion (Ghostscript) and PDF/A check (veraPDF) for ZUGFeRD
 #
 # Network "web" connects frontend and backend; network "data" (internal, no
 # internet) connects backend, worker and db. The frontend cannot reach the db.
@@ -24,6 +25,8 @@ name: erechnung
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-erechnung}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-erechnung}
   OCR_URL: http://ocr:8000
+  # ZUGFeRD: convert to PDF/A-3 and check with veraPDF before release ("off" only for tests)
+  PDFA_CHECK: ${PDFA_CHECK:-on}
 
 services:
   db:

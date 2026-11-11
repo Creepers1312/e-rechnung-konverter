@@ -11,6 +11,7 @@ dependencies = [
   "pdfplumber>=0.11",
   "factur-x>=3.0",
   "lxml>=5.0",
+  "saxonche>=13.1",  # XSLT 3.0 for the official Schematron rules (app/schematron.py)
   "pyyaml>=6.0",
   "reportlab>=4.0",
   "sqlalchemy>=2.0",
@@ -34,7 +35,7 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["extraction/templates/*.yaml", "handbuch/*.md", "handbuch/img/*.png", "data/*.json"]
+app = ["extraction/templates/*.yaml", "handbuch/*.md", "handbuch/img/*.png", "data/*.json", "data/schematron/*"]
 
 [tool.ruff]
 line-length = 120

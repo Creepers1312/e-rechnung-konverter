@@ -3,9 +3,9 @@
 Uses the `factur-x` library, which attaches the XML as `factur-x.xml`, writes
 the required XMP metadata and validates the XML against the Factur-X XSD.
 
-Limitation: the *visual* PDF is not converted to strict PDF/A-3 here (fonts,
-colour profiles). Most receivers accept the result; for strict conformance add
-a Ghostscript/veraPDF step later (see README, "Roadmap").
+The visual PDF must already be PDF/A (fonts embedded, output intent) for the
+result to be PDF/A-3: `convert.py` converts it via the PDF service first and
+checks the finished file with veraPDF afterwards (`app/pdfa.py`).
 """
 
 from __future__ import annotations
@@ -16,8 +16,10 @@ from ..model import Invoice
 from .cii import build_cii
 
 
-def build_zugferd(pdf_bytes: bytes, invoice: Invoice) -> bytes:
-    xml = build_cii(invoice, "zugferd")
+def build_zugferd(pdf_bytes: bytes, invoice: Invoice, xml: bytes | None = None) -> bytes:
+    """`xml` is the already validated CII (see `convert.py`); built from `invoice` if omitted."""
+    if xml is None:
+        xml = build_cii(invoice, "zugferd")
     return facturx.generate_from_binary(
         pdf_bytes,
         xml,

@@ -35,7 +35,7 @@ jobs:
         run: pytest -q
 
   ocr:
-    name: OCR-Dienst (Tesseract)
+    name: PDF-Dienst (OCR, PDF/A, veraPDF)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,7 +48,15 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: ocr/requirements.txt
-      - run: pip install -r requirements.txt pytest httpx pdfplumber reportlab ruff
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: veraPDF installieren (gleiche Version wie im Image)
+        run: |
+          python install_verapdf.py "$HOME/verapdf"
+          echo "VERAPDF=$HOME/verapdf/verapdf" >> "$GITHUB_ENV"
+      - run: pip install -r requirements.txt pytest httpx pdfplumber reportlab ruff factur-x
       - run: ruff check --output-format=github . && ruff format --check .
       - run: pytest -q
 
@@ -89,3 +97,7 @@ jobs:
         run: shellcheck -S warning deploy.sh backup/backup.sh
       - name: Images bauen
         run: docker compose build
+      - name: PDF-Dienst im Image prüfen (Ghostscript + veraPDF als Dienstbenutzer)
+        run: |
+          docker compose run --rm --no-deps -T ocr sh -c \
+            'gs -q -sDEVICE=pdfwrite -o /tmp/t.pdf -c showpage && verapdf --flavour 3b --format json /tmp/t.pdf | grep -q compliant'

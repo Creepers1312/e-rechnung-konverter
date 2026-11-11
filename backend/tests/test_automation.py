@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from app import ocr, review
+from app import ocr, pdfa, review
 from app.db import ReviewItem, get_engine
 from app.export.pdf_render import render_invoice_pdf
 from app.model import Invoice
@@ -85,6 +85,8 @@ def test_scanned_pdf_in_inbox_is_ocred(pdf_folders: Folders, invoice: Invoice, m
     text_version = render_invoice_pdf(invoice)
     monkeypatch.setenv("OCR_URL", "http://ocr:8000")
     monkeypatch.setattr(ocr, "ocr_pdf", lambda data, filename="", pages="": text_version)
+    monkeypatch.setattr(pdfa, "to_pdfa", lambda pdf: pdf)  # the PDF service is active too (OCR_URL)
+    monkeypatch.setattr(pdfa, "verify", lambda pdf: [])
     (pdf_folders.inbox / "scan-1.pdf").write_bytes(_pdf([]))  # image-like: no text layer
     with _db() as s:
         r = process_pdfs(pdf_folders, "zugferd", s, now=1e12)

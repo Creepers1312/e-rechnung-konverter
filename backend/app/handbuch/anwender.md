@@ -59,9 +59,12 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 4. Prüfen Sie die Felder. Oben steht laufend, ob die Rechnung vollständig ist:
    - **✓ Bereit** – alles in Ordnung.
    - **„n Fehler“** – im roten Kasten steht, was fehlt. **„→ zum Feld“** springt direkt zur Stelle.
+   - Meldungen mit **„Offizielle Prüfung …“** stammen aus den amtlichen Regeln für E-Rechnungen (EN 16931, bei XRechnung zusätzlich die deutschen XRechnung-Regeln). Diese Prüfung läuft, sobald alle Pflichtfelder ausgefüllt sind. Eine Rechnung, die sie nicht besteht, würde der Empfänger ablehnen, deshalb lässt sie sich erst nach der Korrektur erzeugen. Wenn Sie die Meldung nicht zuordnen können, wenden Sie sich mit der Regelnummer (z. B. `BR-CO-26`) an Ihren Administrator.
 5. Klicken Sie auf **„ZUGFeRD erzeugen“** bzw. **„XRechnung erzeugen“**. Die Datei wird heruntergeladen und im Archiv gespeichert.
 
 **Gut zu wissen**
+
+- **ZUGFeRD dauert ein paar Sekunden:** Die Datei wird beim Erzeugen in das Archivformat **PDF/A-3** umgewandelt und geprüft. Meldungen mit **„PDF/A-…“** betreffen die PDF-Datei selbst, nicht Ihre Eingaben. Meist hilft es, es später noch einmal zu versuchen. Lässt sich das Original-PDF nicht umwandeln, erzeugen Sie die Rechnung als **XRechnung**.
 
 - **Gescannte PDFs** werden automatisch per Texterkennung gelesen – Seite für Seite, auch wenn der Scanner einen Stempel oder eine eigene (schlechte) Textebene eingefügt hat. Prüfen Sie hier Zahlen und Namen besonders genau.
 - **Text falsch oder gar nicht gelesen?** Oben auf **„Texterkennung erzwingen“** klicken: Das PDF wird komplett neu per Texterkennung gelesen (Änderungen im Formular gehen dabei verloren).

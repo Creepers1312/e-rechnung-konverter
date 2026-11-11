@@ -1,4 +1,4 @@
-ocrmypdf>=16,<18
+ocrmypdf>=17,<18  # 17: ocr_engine="none" for PDF/A conversion without OCR
 fastapi>=0.115
 uvicorn>=0.30
 python-multipart>=0.0.9

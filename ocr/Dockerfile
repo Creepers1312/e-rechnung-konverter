@@ -6,10 +6,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     OMP_THREAD_LIMIT=1
 
-# Tesseract with German + English, Ghostscript for PDF handling
-RUN apt-get update \
+# Tesseract with German + English (OCR), Ghostscript (PDF handling, PDF/A-3 conversion),
+# Java for veraPDF (PDF/A check). The man directory is missing in slim images and the
+# JRE's post-install script needs it.
+RUN mkdir -p /usr/share/man/man1 \
+ && apt-get update \
  && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng ghostscript \
+      default-jre-headless \
  && rm -rf /var/lib/apt/lists/*
+
+# veraPDF, pinned version + SHA-256 (see install_verapdf.py)
+COPY install_verapdf.py /tmp/
+RUN python /tmp/install_verapdf.py /opt/verapdf \
+ && ln -s /opt/verapdf/verapdf /usr/local/bin/verapdf \
+ && rm /tmp/install_verapdf.py
 
 WORKDIR /app
 COPY requirements.txt .
