@@ -68,7 +68,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: frontend/package.json  # pnpm version from "packageManager"
       - uses: actions/setup-node@v4
