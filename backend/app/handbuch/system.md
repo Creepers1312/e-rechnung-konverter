@@ -143,7 +143,7 @@ veraPDF (Java, Version und Prüfsumme in `ocr/install_verapdf.py`) wird beim Bau
 
 Eine E-Rechnung wird nur erzeugt, wenn alle Stufen bestanden sind – beim Export aus der Oberfläche genauso wie im automatischen Eingang (`app/convert.py`):
 
-1. **Vorprüfung** am Rechnungsmodell (`app/validation.py`): Pflichtfelder, IBAN, Summen gegen den Beleg. Die Meldungen sind deutsch und markieren das betroffene Feld im Formular.
+1. **Vorprüfung** am Rechnungsmodell (`app/validation.py`): Pflichtfelder, IBAN, Summen gegen den Beleg – dazu die Pflichtangaben nach § 14 Abs. 4 UStG, die die EN 16931 nur als optional führt: Liefer-/Leistungsdatum (`UStG-14-6`) und Straße bzw. Postfach von Käufer und Verkäufer (`UStG-14-1`). Ohne sie wäre die Datei technisch gültig, berechtigte den Kunden aber nicht zum Vorsteuerabzug. Die Meldungen sind deutsch und markieren das betroffene Feld im Formular.
 2. **XSD-Schema** des erzeugten CII-XML (Factur-X, Profil EN 16931).
 3. **Offizielle Schematron-Regeln** (`app/schematron.py`) – dieselben Regeln, die der KoSIT-Validator und die Empfänger anwenden:
 

@@ -74,7 +74,7 @@ def render_invoice_pdf(invoice: Invoice) -> bytes:
             y -= 4.5 * mm
 
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(20 * mm, height - 100 * mm, "Gutschrift" if invoice.type_code == "381" else "Rechnung")
+    c.drawString(20 * mm, height - 100 * mm, "Rechnungskorrektur" if invoice.type_code == "381" else "Rechnung")
 
     y = height - 112 * mm
     c.setFont("Helvetica-Bold", 9)

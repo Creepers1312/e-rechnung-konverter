@@ -1,7 +1,8 @@
 """Business-rule checks run before export.
 
 These cover the EN 16931 / XRechnung rules that typically fail when data comes
-from a PDF. They are a fast pre-check with German messages tied to form fields; the
+from a PDF, plus the German VAT law (§ 14 Abs. 4 UStG: delivery date, street) –
+the invoices go to customers in Germany. They are a fast pre-check with German messages tied to form fields; the
 official Schematron rules run on the generated XML afterwards (`schematron.py`,
 `convert.check_xml`).
 """
@@ -62,10 +63,13 @@ def required_fields(invoice: Invoice, profile: Profile) -> list[str]:
     fields = [
         "number",
         "issue_date",
+        "delivery_date",  # § 14 Abs. 4 Nr. 6 UStG
         "buyer.name",
+        "buyer.address.line1",  # § 14 Abs. 4 Nr. 1 UStG
         "buyer.address.city",
         "buyer.address.country_code",
         "seller.name",
+        "seller.address.line1",
         "seller.address.postcode",
         "seller.address.city",
         "seller.address.country_code",
@@ -120,6 +124,23 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
         err("BR-11", "buyer.address.country_code", "Ländercode des Käufers fehlt.")
     if not invoice.lines:
         err("BR-16", "lines", "Die Rechnung braucht mindestens eine Position.")
+
+    # German VAT law (§ 14 Abs. 4 UStG) – optional in EN 16931, but without them the invoice
+    # does not entitle the buyer to deduct input tax.
+    if invoice.delivery_date is None:
+        err(
+            "UStG-14-6",
+            "delivery_date",
+            "Liefer-/Leistungsdatum fehlt – Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG "
+            "(auch wenn es dem Rechnungsdatum entspricht).",
+        )
+    for field, who, address in (("seller", "Verkäufers", s.address), ("buyer", "Käufers", b.address)):
+        if not address.line1.strip():
+            err(
+                "UStG-14-1",
+                f"{field}.address.line1",
+                f"Straße bzw. Postfach des {who} fehlt – vollständige Anschrift nach § 14 Abs. 4 Nr. 1 UStG.",
+            )
 
     for i, line in enumerate(invoice.lines):
         if not line.name.strip():

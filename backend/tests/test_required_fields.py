@@ -96,3 +96,17 @@ def test_validate_endpoint_returns_required_fields(client: TestClient, invoice: 
     r = client.post("/api/validate", json={"invoice": invoice.model_dump(mode="json"), "profile": "zugferd"})
     assert r.status_code == 200
     assert r.json()["required"] == required_fields(invoice, "zugferd")
+
+
+@pytest.mark.parametrize("profile", ["zugferd", "xrechnung"])
+def test_german_vat_law_needs_delivery_date_and_street(invoice: Invoice, profile: str) -> None:
+    """§ 14 Abs. 4 UStG: optional in EN 16931, mandatory for an invoice that allows input tax deduction."""
+    invoice.delivery_date = None
+    invoice.seller.address.line1 = ""
+    invoice.buyer.address.line1 = ""
+    errors = [(i.code, i.field) for i in validate(invoice, profile) if i.severity == "error"]  # type: ignore[arg-type]
+    assert errors == [
+        ("UStG-14-6", "delivery_date"),
+        ("UStG-14-1", "seller.address.line1"),
+        ("UStG-14-1", "buyer.address.line1"),
+    ]

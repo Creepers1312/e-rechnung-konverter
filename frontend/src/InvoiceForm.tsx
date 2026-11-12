@@ -33,24 +33,38 @@ export interface FieldProps {
   wide?: boolean;
   placeholder?: string;
   required?: boolean;
+  /** small button next to the input, e.g. "= Rechnungsdatum" */
+  action?: { label: string; title: string; onClick: () => void };
 }
 
-export function Field({ label, path, value, update, issues, type = "text", wide, placeholder, required }: FieldProps) {
+export function Field({ label, path, value, update, issues, type = "text", wide, placeholder, required, action }: FieldProps) {
   const error = hasError(issues, path);
+  const input = (
+    <input
+      data-path={path}
+      aria-required={required || undefined}
+      type={type}
+      value={value ?? ""}
+      placeholder={placeholder}
+      onChange={(e) => update(path, type === "date" ? e.target.value || null : e.target.value)}
+    />
+  );
   return (
     <label className={`field${wide ? " wide" : ""}${error ? " invalid" : ""}`} title={error?.message}>
       <span>
         {label}
         <RequiredMark on={required} />
       </span>
-      <input
-        data-path={path}
-        aria-required={required || undefined}
-        type={type}
-        value={value ?? ""}
-        placeholder={placeholder}
-        onChange={(e) => update(path, type === "date" ? e.target.value || null : e.target.value)}
-      />
+      {action ? (
+        <div className="field-row">
+          {input}
+          <button type="button" className="secondary small" title={action.title} onClick={action.onClick}>
+            {action.label}
+          </button>
+        </div>
+      ) : (
+        input
+      )}
     </label>
   );
 }
@@ -224,12 +238,23 @@ export function InvoiceForm({ invoice, update, issues, required, profile }: {
         <div className="grid">
           {f("Rechnungsnummer", "number", invoice.number)}
           {f("Rechnungsdatum", "issue_date", invoice.issue_date, { type: "date" })}
-          {f("Liefer-/Leistungsdatum", "delivery_date", invoice.delivery_date, { type: "date" })}
+          {f("Liefer-/Leistungsdatum", "delivery_date", invoice.delivery_date, {
+            type: "date",
+            // deliberately a button, not a default: the date is a statement of fact (§ 14 UStG)
+            action:
+              invoice.issue_date && invoice.delivery_date !== invoice.issue_date
+                ? {
+                    label: "= Rechnungsdatum",
+                    title: "Geliefert bzw. geleistet am Tag der Rechnung",
+                    onClick: () => update("delivery_date", invoice.issue_date),
+                  }
+                : undefined,
+          })}
           <label className="field">
             <span>Art</span>
             <select value={invoice.type_code} onChange={(e) => update("type_code", e.target.value)}>
               <option value="380">Rechnung</option>
-              <option value="381">Gutschrift</option>
+              <option value="381">Rechnungskorrektur</option>
             </select>
           </label>
           {f("Leitweg-ID / Käuferreferenz", "buyer_reference", invoice.buyer_reference)}

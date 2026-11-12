@@ -176,6 +176,9 @@ details[open] summary { margin-bottom: 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; }
 .field { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: var(--text); }
 .field.wide { grid-column: 1 / -1; }
+.field-row { display: flex; gap: 6px; align-items: center; }
+.field-row input { flex: 1; min-width: 0; }
+.field-row button { white-space: nowrap; }
 abbr.req { color: var(--error); text-decoration: none; margin-left: 2px; cursor: help; }
 .required-legend { margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); }
 input, select {
