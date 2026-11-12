@@ -216,6 +216,17 @@ docker compose exec backup pg_restore --clean --if-exists --no-owner -d erechnun
 docker compose start backend worker
 ```
 
+### Überwachung mit Checkmk
+
+Ist auf dem Host ein Checkmk-Agent installiert, richtet `./deploy.sh` den Local Check
+[`monitoring/checkmk/erechnung`](monitoring/checkmk/erechnung) ein (Kopie nach
+`/usr/lib/check_mk_agent/local/erechnung-<Projektname>`, bei jedem Update erneuert).
+Danach in Checkmk eine Service-Erkennung für den Host starten. Es erscheinen die Services
+**E-Rechnung App** (Weboberfläche/API antwortet), **Container** (alle Dienste laufen und
+sind gesund), **Backup** (Alter und Größe der neuesten Sicherung: WARN ab 26 h, CRIT ab 50 h)
+und **Eingang** (Dateien in `error/` oder hängend in `inbox/`). Schwellen in `.env`:
+`CHECKMK_BACKUP_WARN_HOURS`, `CHECKMK_BACKUP_CRIT_HOURS`, `CHECKMK_INBOX_STALE_MINUTES`.
+
 Den Backup-Ordner zusätzlich auf ein anderes System kopieren (NAS, Bandsicherung …) –
 eine Sicherung auf derselben Festplatte schützt nicht vor deren Ausfall.
 Die IDoc-Ordner (`data/idoc`) gehören ebenfalls in die normale Dateisicherung.
@@ -339,6 +350,7 @@ compose.yaml                frontend, backend, worker, db, backup
 deploy.sh                   Installation & Update (Docker-Check, .env, Ordner, Start, Prüfung)
 deploy/                     Overlays: compose.https.yaml (Caddy), compose.proxy.yaml (vorhandener Proxy)
 backup/backup.sh            Sicherungsskript des backup-Dienstes
+monitoring/checkmk/         Checkmk Local Check (App, Container, Backup, Eingang)
 samples/                    Beispiel-PDF und Beispiel-IDoc
 scripts/make_sample_pdf.py  Erzeugt samples/beispielrechnung.pdf neu
 ```

@@ -94,7 +94,7 @@ jobs:
             COMPOSE_FILE=$f docker compose config -q && echo "ok: $f"
           done
       - name: Shell-Skripte prüfen (shellcheck)
-        run: shellcheck -S warning deploy.sh backup/backup.sh
+        run: shellcheck -S warning deploy.sh backup/backup.sh monitoring/checkmk/erechnung
       - name: Images bauen
         run: docker compose build
       - name: PDF-Dienst im Image prüfen (Ghostscript + veraPDF als Dienstbenutzer)

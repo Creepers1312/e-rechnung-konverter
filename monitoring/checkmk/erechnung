@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Checkmk local check for the E-Rechnung Konverter (one installation = one Compose project).
+#
+# Installed by deploy.sh as  /usr/lib/check_mk_agent/local/erechnung-<COMPOSE_PROJECT_NAME>
+# (a root-owned copy with ERECHNUNG_DIR filled in; refreshed on every ./deploy.sh).
+# In Checkmk: run a service discovery on the host, the services below appear.
+#
+#   E-Rechnung App        web UI -> API answers (/api/health through the frontend container)
+#   E-Rechnung Container  every Compose service runs and is healthy (incl. worker heartbeat)
+#   E-Rechnung Backup     age and size of the newest database dump
+#   E-Rechnung Eingang    files in error/ folders, files stuck in inbox/
+#
+# Thresholds can be set in .env (defaults in brackets):
+#   CHECKMK_BACKUP_WARN_HOURS [26]  CHECKMK_BACKUP_CRIT_HOURS [50]  CHECKMK_INBOX_STALE_MINUTES [15]
+#
+# Test by hand:  sudo /usr/lib/check_mk_agent/local/erechnung-<project>
+set -uo pipefail
+
+ERECHNUNG_DIR=""  # filled in by deploy.sh; empty = the project folder this script lives in
+[ -n "$ERECHNUNG_DIR" ] || ERECHNUNG_DIR=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
+cd "$ERECHNUNG_DIR" 2>/dev/null || {
+  echo "2 \"E-Rechnung App\" - Projektordner $ERECHNUNG_DIR fehlt"
+  exit 0
+}
+
+env_get() { [ -f .env ] && grep -E "^$1=" .env | tail -n1 | cut -d= -f2- || true; }
+setting() { local v; v=$(env_get "$1"); echo "${v:-$2}"; }
+
+PROJECT=$(setting COMPOSE_PROJECT_NAME erechnung)
+# several installations on one host: keep the service names apart
+SUFFIX=""
+[ "$PROJECT" = erechnung ] || SUFFIX=" $PROJECT"
+
+out() {  # out <state 0-3> <name> <metrics or -> <text>
+  echo "$1 \"E-Rechnung $2$SUFFIX\" $3 $4"
+}
+
+compose() { timeout 30 docker compose "$@"; }
+
+# --- App: the same path a browser takes (nginx -> backend) -------------------
+start=$(date +%s%N)
+if body=$(compose exec -T frontend wget -qO- -T 10 http://127.0.0.1/api/health 2>&1) && [[ "$body" == *'"ok"'* ]]; then
+  seconds=$(awk -v ns=$(($(date +%s%N) - start)) 'BEGIN { printf "%.3f", ns / 1e9 }')
+  out 0 App "response_time=$seconds;5;15" "Weboberfläche und API antworten (${seconds} s)"
+else
+  out 2 App - "App antwortet nicht: ${body//$'\n'/ } (docker compose logs frontend backend)"
+fi
+
+# --- Container: every service of this project runs and is healthy ------------
+if services=$(compose config --services 2>/dev/null) && [ -n "$services" ]; then
+  status=$(compose ps -a --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null)
+  state=0 total=0 good=0 problems=()
+  for service in $services; do
+    total=$((total + 1))
+    read -r _ run health <<<"$(grep -E "^$service " <<<"$status" | head -n1)"
+    if [ -z "${run:-}" ]; then
+      problems+=("$service fehlt"); state=2
+    elif [ "$run" != running ]; then
+      problems+=("$service $run"); state=2
+    elif [ "${health:-}" = unhealthy ]; then
+      problems+=("$service unhealthy"); state=2
+    elif [ "${health:-}" = starting ]; then
+      problems+=("$service startet"); [ "$state" -ge 1 ] || state=1
+    else
+      good=$((good + 1))
+    fi
+    run="" health=""
+  done
+  if [ "$state" -eq 0 ]; then
+    out 0 Container "running=$good;;;0;$total" "alle $total Dienste laufen ($(echo "$services" | tr '\n' ' ' | sed 's/ $//'))"
+  else
+    out "$state" Container "running=$good;;;0;$total" "$good/$total gesund – $(IFS=,; echo "${problems[*]}" | sed 's/,/, /g')"
+  fi
+else
+  out 2 Container - "docker compose nicht erreichbar (Docker-Dienst läuft? .env vorhanden?)"
+fi
+
+# --- Backup: newest dump on the host ------------------------------------------
+backup_dir=$(setting BACKUP_HOST_DIR ./backups)
+warn_h=$(setting CHECKMK_BACKUP_WARN_HOURS 26)
+crit_h=$(setting CHECKMK_BACKUP_CRIT_HOURS 50)
+mapfile -t dumps < <(ls -1t "$backup_dir"/erechnung-*.dump 2>/dev/null)
+if [ "${#dumps[@]}" -eq 0 ]; then
+  out 2 Backup - "keine Sicherung in $backup_dir (docker compose logs backup)"
+else
+  newest=${dumps[0]}
+  read -r mtime size < <(stat -c '%Y %s' "$newest")
+  age=$(($(date +%s) - mtime))
+  hours=$((age / 3600))
+  state=0 note=""
+  if [ "$age" -ge $((crit_h * 3600)) ]; then state=2; note=" – älter als $crit_h h!"
+  elif [ "$age" -ge $((warn_h * 3600)) ]; then state=1; note=" – älter als $warn_h h"
+  fi
+  if [ "$size" -lt 1024 ]; then
+    state=2; note="$note – Datei fast leer ($size Bytes)"
+  elif [ "${#dumps[@]}" -gt 1 ]; then
+    previous=$(stat -c '%s' "${dumps[1]}")
+    if [ "$size" -lt $((previous / 2)) ]; then
+      [ "$state" -ge 1 ] || state=1
+      note="$note – nur halb so groß wie die vorige ($(numfmt --to=iec "$previous"))"
+    fi
+  fi
+  metrics="age=$age;$((warn_h * 3600));$((crit_h * 3600))|size=$size|count=${#dumps[@]}"
+  out "$state" Backup "$metrics" \
+    "neueste: $(basename "$newest") vor $hours h, $(numfmt --to=iec "$size"), ${#dumps[@]} Sicherungen$note"
+fi
+
+# --- Eingang: unreadable files and files the worker does not pick up ----------
+stale_min=$(setting CHECKMK_INBOX_STALE_MINUTES 15)
+errors=0 stale=0 details=()
+for key in IDOC PDF STAMMDATEN; do
+  dir=$(setting "${key}_HOST_DIR" "./data/$(tr '[:upper:]' '[:lower:]' <<<"$key")")
+  [ -d "$dir" ] || continue
+  e=$(find "$dir/error" -type f ! -name '.*' 2>/dev/null | wc -l)
+  s=$(find "$dir/inbox" -type f ! -name '.*' -mmin +"$stale_min" 2>/dev/null | wc -l)
+  errors=$((errors + e)) stale=$((stale + s))
+  [ "$e" -eq 0 ] || details+=("$e in $dir/error")
+  [ "$s" -eq 0 ] || details+=("$s seit über $stale_min min in $dir/inbox")
+done
+metrics="errors=$errors|stale=$stale"
+if [ "$errors" -eq 0 ] && [ "$stale" -eq 0 ]; then
+  out 0 Eingang "$metrics" "keine Fehler, nichts hängt"
+else
+  text=$(IFS=';'; echo "${details[*]}" | sed 's/;/, /g')
+  [ "$stale" -eq 0 ] || text="$text (Worker hängt oder Eingang abgeschaltet?)"
+  [ "$errors" -eq 0 ] || text="$text – Verwaltung → Eingänge & Automatik"
+  out 1 Eingang "$metrics" "$text"
+fi

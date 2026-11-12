@@ -313,6 +313,25 @@ case "$MODE" in
   proxy) d=$(env_get DOMAIN); URL=${d:+https://$d}; URL=${URL:-"(im Reverse-Proxy einrichten)"} ;;
 esac
 
+# =============================================================================
+step "Monitoring (Checkmk)"
+# =============================================================================
+# A Checkmk agent on this host? Install the local check as a root-owned copy (not a
+# symlink: the agent runs it as root) – refreshed on every run, one per project.
+MK_LOCAL="${MK_LOCALDIR:-/usr/lib/check_mk_agent}/local"
+MK_CHECK="$MK_LOCAL/erechnung-$PROJECT"
+if [ -d "$MK_LOCAL" ]; then
+  if [ -f "$MK_CHECK" ] || confirm "Checkmk-Agent gefunden – Local Check für App, Container, Backup und Eingang einrichten?"; then
+    sed "s|^ERECHNUNG_DIR=\"\"|ERECHNUNG_DIR=\"$PWD\"|" monitoring/checkmk/erechnung \
+      | $SUDO install -o root -g root -m 0755 /dev/stdin "$MK_CHECK"
+    ok "Local Check: $MK_CHECK – in Checkmk eine Service-Erkennung für diesen Host starten"
+  else
+    ok "Übersprungen (später: ./deploy.sh erneut ausführen)"
+  fi
+else
+  ok "Kein Checkmk-Agent gefunden ($MK_LOCAL) – übersprungen"
+fi
+
 if [ -n "$ADMIN_PW" ]; then
   # The admin exists now; do not keep the initial password lying around in .env.
   env_set ADMIN_PASSWORD ""

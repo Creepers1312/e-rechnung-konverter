@@ -237,6 +237,17 @@ docker compose exec backend python -m app.manage reset-password admin   # Notfal
 
 **Überwachung:** Jeder Dienst hat einen Healthcheck. Der Worker gilt als gestört, wenn seit 60 Sekunden keine Runde fertig wurde (Startseite: Kachel „Automatik“). Das Backup gilt als gestört, wenn die neueste Sicherung älter als 26 Stunden ist.
 
+**Checkmk:** Ist auf dem Host ein Checkmk-Agent installiert, richtet `./deploy.sh` den Local Check `monitoring/checkmk/erechnung` ein (als `/usr/lib/check_mk_agent/local/erechnung-<Projektname>`, bei jedem Update erneuert). Nach einer Service-Erkennung des Hosts erscheinen:
+
+| Service | Prüft | Zustand |
+|---|---|---|
+| E-Rechnung App | Weboberfläche → API antwortet (`/api/health` über den Frontend-Container) | CRIT, wenn keine Antwort |
+| E-Rechnung Container | jeder Dienst des Projekts läuft und ist „healthy“ (u. a. Worker-Heartbeat, PDF-Dienst, Datenbank) | CRIT bei gestopptem/ungesundem Dienst, WARN beim Start |
+| E-Rechnung Backup | Alter und Größe der neuesten Sicherung in `BACKUP_HOST_DIR` | WARN ab 26 h, CRIT ab 50 h oder bei fast leerer Datei; WARN, wenn nur halb so groß wie die vorige |
+| E-Rechnung Eingang | Dateien in den `error/`-Ordnern, Dateien länger als 15 min in `inbox/` | WARN |
+
+Schwellen in `.env`: `CHECKMK_BACKUP_WARN_HOURS`, `CHECKMK_BACKUP_CRIT_HOURS`, `CHECKMK_INBOX_STALE_MINUTES`. Von Hand testen: `sudo /usr/lib/check_mk_agent/local/erechnung-<Projektname>`.
+
 **Sicherung:** täglich `pg_dump` nach `BACKUP_HOST_DIR`; zusätzlich auf ein anderes System kopieren. Die Eingangsordner gehören in die normale Dateisicherung.
 
 **Wiederherstellung:**

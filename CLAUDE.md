@@ -45,7 +45,8 @@ comments and identifiers are English.
    Network `data` is internal: worker, db, backup and ocr have no internet. The
    IDoc, PDF and customer-master (`stammdaten`) inbox folders are mounted into worker (processing) and backend
    (admin status/retry).
-   `deploy.sh` installs/updates; overlays in `deploy/` (Caddy HTTPS, existing
+   `deploy.sh` installs/updates (and installs the Checkmk local check
+   `monitoring/checkmk/erechnung` when a Checkmk agent is present); overlays in `deploy/` (Caddy HTTPS, existing
    Docker proxy) are selected via `COMPOSE_FILE` in `.env`. Everything is
    namespaced by `COMPOSE_PROJECT_NAME` – never hard-code container, network,
    volume or image names (other stacks may share the host).
