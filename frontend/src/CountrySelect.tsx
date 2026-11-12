@@ -44,12 +44,14 @@ export function CountrySelect({
   value,
   update,
   issues,
+  required,
 }: {
   label?: string;
   path: string;
   value: string;
   update: (path: string, value: unknown) => void;
   issues: Issue[];
+  required?: boolean;
 }) {
   const [list, setList] = useState<Country[]>([]);
   const [open, setOpen] = useState(false);
@@ -89,9 +91,13 @@ export function CountrySelect({
 
   return (
     <label className={`field country-field${error ? " invalid" : ""}`} title={error?.message}>
-      <span>{label}</span>
+      <span>
+        {label}
+        {required && <abbr className="req" title="Pflichtangabe">*</abbr>}
+      </span>
       <input
         data-path={path}
+        aria-required={required || undefined}
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"

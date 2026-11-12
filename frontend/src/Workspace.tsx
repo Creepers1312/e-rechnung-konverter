@@ -546,6 +546,8 @@ export function Workspace({ onChanged }: { onChanged: () => void }) {
                 invoice={invoice}
                 update={(path, value) => setInvoice((inv) => inv && setPath(inv, path, value))}
                 issues={issues}
+                required={check?.required ?? []}
+                profile={profile}
               />
             </div>
           </div>

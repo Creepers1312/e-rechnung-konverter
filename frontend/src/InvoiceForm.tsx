@@ -1,6 +1,6 @@
 import { BuyerLookup } from "./BuyerLookup";
 import { CountrySelect } from "./CountrySelect";
-import type { Invoice, Issue, LineItem, Party, VatCategory } from "./types";
+import type { Invoice, Issue, LineItem, Party, Profile, VatCategory } from "./types";
 
 export type Update = (path: string, value: unknown) => void;
 
@@ -18,6 +18,11 @@ function hasError(issues: Issue[], path: string): Issue | undefined {
   return issues.find((i) => i.severity === "error" && i.field && (i.field === path || path.startsWith(i.field + ".")));
 }
 
+/** "*" behind the label of a mandatory field (list from the backend, see validation.required_fields). */
+export function RequiredMark({ on }: { on?: boolean }) {
+  return on ? <abbr className="req" title="Pflichtangabe">*</abbr> : null;
+}
+
 export interface FieldProps {
   label: string;
   path: string;
@@ -27,15 +32,20 @@ export interface FieldProps {
   type?: "text" | "date" | "email";
   wide?: boolean;
   placeholder?: string;
+  required?: boolean;
 }
 
-export function Field({ label, path, value, update, issues, type = "text", wide, placeholder }: FieldProps) {
+export function Field({ label, path, value, update, issues, type = "text", wide, placeholder, required }: FieldProps) {
   const error = hasError(issues, path);
   return (
     <label className={`field${wide ? " wide" : ""}${error ? " invalid" : ""}`} title={error?.message}>
-      <span>{label}</span>
+      <span>
+        {label}
+        <RequiredMark on={required} />
+      </span>
       <input
         data-path={path}
+        aria-required={required || undefined}
         type={type}
         value={value ?? ""}
         placeholder={placeholder}
@@ -45,15 +55,24 @@ export function Field({ label, path, value, update, issues, type = "text", wide,
   );
 }
 
-export function PartyFields({ prefix, party, update, issues, seller }: {
+export function PartyFields({ prefix, party, update, issues, seller, required = [] }: {
   prefix: string;
   party: Party;
   update: Update;
   issues: Issue[];
   seller?: boolean;
+  required?: string[];
 }) {
   const f = (label: string, path: string, value: string, extra: Partial<FieldProps> = {}) => (
-    <Field label={label} path={`${prefix}.${path}`} value={value} update={update} issues={issues} {...extra} />
+    <Field
+      label={label}
+      path={`${prefix}.${path}`}
+      value={value}
+      update={update}
+      issues={issues}
+      required={required.includes(`${prefix}.${path}`)}
+      {...extra}
+    />
   );
   return (
     <div className="grid">
@@ -62,7 +81,13 @@ export function PartyFields({ prefix, party, update, issues, seller }: {
       {f("Adresszusatz", "address.line2", party.address.line2, { wide: true })}
       {f("PLZ", "address.postcode", party.address.postcode)}
       {f("Ort", "address.city", party.address.city)}
-      <CountrySelect path={`${prefix}.address.country_code`} value={party.address.country_code} update={update} issues={issues} />
+      <CountrySelect
+        path={`${prefix}.address.country_code`}
+        value={party.address.country_code}
+        update={update}
+        issues={issues}
+        required={required.includes(`${prefix}.address.country_code`)}
+      />
       {f("USt-IdNr.", "vat_id", party.vat_id)}
       {seller && f("Steuernummer", "tax_number", party.tax_number)}
       {f("E-Rechnungs-Adresse (E-Mail)", "electronic_address", party.electronic_address, { type: "email", wide: true })}
@@ -95,7 +120,13 @@ const CATEGORIES: [VatCategory, string][] = [
   ["G", "Export"],
 ];
 
-function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Update; issues: Issue[] }) {
+function LinesTable({ lines, update, issues, required }: {
+  lines: LineItem[];
+  update: Update;
+  issues: Issue[];
+  required: string[];
+}) {
+  const req = (key: keyof LineItem) => required.some((p) => /^lines\.\d+\./.test(p) && p.endsWith(`.${key}`));
   const add = () =>
     update("lines", [
       ...lines,
@@ -120,7 +151,10 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
           <tr>
             <th>Pos</th>
             <th>Artikel-Nr.</th>
-            <th>Bezeichnung</th>
+            <th>
+              Bezeichnung
+              <RequiredMark on={req("name")} />
+            </th>
             <th>Menge</th>
             <th>Einheit</th>
             <th>Preis netto</th>
@@ -167,12 +201,24 @@ function LinesTable({ lines, update, issues }: { lines: LineItem[]; update: Upda
   );
 }
 
-export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; update: Update; issues: Issue[] }) {
+export function InvoiceForm({ invoice, update, issues, required, profile }: {
+  invoice: Invoice;
+  update: Update;
+  issues: Issue[];
+  required: string[];
+  profile: Profile;
+}) {
   const f = (label: string, path: string, value: string | null, extra: Partial<FieldProps> = {}) => (
-    <Field label={label} path={path} value={value} update={update} issues={issues} {...extra} />
+    <Field label={label} path={path} value={value} update={update} issues={issues} required={required.includes(path)} {...extra} />
   );
+  const sellerRequired = required.filter((p) => p.startsWith("seller.")).length;
   return (
     <div className="form">
+      {required.length > 0 && (
+        <p className="required-legend">
+          <RequiredMark on /> = Pflichtangabe für {profile === "xrechnung" ? "XRechnung" : "ZUGFeRD"}
+        </p>
+      )}
       <section>
         <h2>Rechnung</h2>
         <div className="grid">
@@ -196,11 +242,11 @@ export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; upd
           <h2>Käufer</h2>
           <BuyerLookup invoice={invoice} update={update} />
         </div>
-        <PartyFields prefix="buyer" party={invoice.buyer} update={update} issues={issues} />
+        <PartyFields prefix="buyer" party={invoice.buyer} update={update} issues={issues} required={required} />
       </section>
       <section>
         <h2>Positionen</h2>
-        <LinesTable lines={invoice.lines} update={update} issues={issues} />
+        <LinesTable lines={invoice.lines} update={update} issues={issues} required={required} />
       </section>
       <section>
         <h2>Zahlung</h2>
@@ -213,8 +259,11 @@ export function InvoiceForm({ invoice, update, issues }: { invoice: Invoice; upd
         </div>
       </section>
       <details open={issues.some((i) => i.severity === "error" && i.field.startsWith("seller")) || undefined}>
-        <summary>Verkäufer (eigene Firma – aus Stammdaten)</summary>
-        <PartyFields prefix="seller" party={invoice.seller} update={update} issues={issues} seller />
+        <summary>
+          Verkäufer (eigene Firma – aus Stammdaten)
+          {sellerRequired > 0 && <span className="muted"> · {sellerRequired} Pflichtangaben</span>}
+        </summary>
+        <PartyFields prefix="seller" party={invoice.seller} update={update} issues={issues} seller required={required} />
       </details>
     </div>
   );

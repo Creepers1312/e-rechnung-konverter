@@ -47,6 +47,50 @@ def iban_is_valid(iban: str) -> bool:
     return int(digits) % 97 == 1
 
 
+def _needs_postcode(invoice: Invoice, profile: Profile) -> bool:
+    # EN 16931 only requires the country; a German address and XRechnung (BR-DE-8/9) need city and
+    # postcode. Abroad (e.g. Costa Rica) addresses often have no postcode – the city is enough.
+    return invoice.buyer.address.country_code in ("", "DE") or profile == "xrechnung"
+
+
+def required_fields(invoice: Invoice, profile: Profile) -> list[str]:
+    """Form fields `validate` reports as an error when empty – for this invoice and profile.
+
+    Shown as "*" in the form. Keep in sync with `validate` (tests/test_required_fields.py
+    clears every field of a complete invoice and compares).
+    """
+    fields = [
+        "number",
+        "issue_date",
+        "buyer.name",
+        "buyer.address.city",
+        "buyer.address.country_code",
+        "seller.name",
+        "seller.address.postcode",
+        "seller.address.city",
+        "seller.address.country_code",
+        "seller.vat_id",  # BR-S-02 / BR-CO-26: the tax number alone is not enough
+    ]
+    fields += [f"lines.{i}.name" for i in range(len(invoice.lines))]
+    if _needs_postcode(invoice, profile):
+        fields.append("buyer.address.postcode")
+    if any(line.vat_category in ("AE", "K") for line in invoice.lines):
+        fields.append("buyer.vat_id")
+    means = invoice.payment.means_code
+    if means == "58" or (profile == "xrechnung" and not means):
+        fields.append("payment.iban")
+    if profile == "xrechnung":
+        fields += [
+            "buyer_reference",
+            "buyer.electronic_address",
+            "seller.electronic_address",
+            "seller.contact.name",
+            "seller.contact.phone",
+            "seller.contact.email",
+        ]
+    return fields
+
+
 def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = None) -> list[Issue]:
     issues: list[Issue] = []
 
@@ -70,10 +114,7 @@ def validate(invoice: Invoice, profile: Profile, stated: StatedTotals | None = N
         err("BR-08", "seller.address", "Anschrift des Verkäufers unvollständig (PLZ/Ort).")
     if not s.address.country_code:
         err("BR-09", "seller.address.country_code", "Ländercode des Verkäufers fehlt.")
-    # EN 16931 only requires the country; a German address and XRechnung (BR-DE-8/9) need city and
-    # postcode. Abroad (e.g. Costa Rica) addresses often have no postcode – the city is enough.
-    needs_postcode = b.address.country_code in ("", "DE") or profile == "xrechnung"
-    if not b.address.city or (needs_postcode and not b.address.postcode):
+    if not b.address.city or (_needs_postcode(invoice, profile) and not b.address.postcode):
         err("BR-10", "buyer.address", "Anschrift des Käufers unvollständig (PLZ/Ort).")
     if not b.address.country_code:
         err("BR-11", "buyer.address.country_code", "Ländercode des Käufers fehlt.")

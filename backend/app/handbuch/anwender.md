@@ -56,7 +56,7 @@ Die App liest die Rechnung und zeigt links das **Original** und rechts die **erk
 ![Erkannte Daten prüfen](img/umwandeln-pruefen.png)
 
 3. Wählen Sie oben das Format: **ZUGFeRD** (Standard) oder **XRechnung** (für Behörden).
-4. Prüfen Sie die Felder. Oben steht laufend, ob die Rechnung vollständig ist:
+4. Prüfen Sie die Felder. Felder mit einem roten **\*** sind für das gewählte Format Pflicht. Die Markierung passt sich an: XRechnung verlangt mehr als ZUGFeRD (z. B. Leitweg-ID und E-Rechnungs-Adressen), und bei Reverse Charge oder innergemeinschaftlicher Lieferung wird zusätzlich die USt-IdNr. des Käufers zur Pflicht. Oben steht laufend, ob die Rechnung vollständig ist:
    - **✓ Bereit** – alles in Ordnung.
    - **„n Fehler“** – im roten Kasten steht, was fehlt. **„→ zum Feld“** springt direkt zur Stelle.
    - Meldungen mit **„Offizielle Prüfung …“** stammen aus den amtlichen Regeln für E-Rechnungen (EN 16931, bei XRechnung zusätzlich die deutschen XRechnung-Regeln). Diese Prüfung läuft, sobald alle Pflichtfelder ausgefüllt sind. Eine Rechnung, die sie nicht besteht, würde der Empfänger ablehnen, deshalb lässt sie sich erst nach der Korrektur erzeugen. Wenn Sie die Meldung nicht zuordnen können, wenden Sie sich mit der Regelnummer (z. B. `BR-CO-26`) an Ihren Administrator.

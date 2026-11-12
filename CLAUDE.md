@@ -62,6 +62,9 @@ comments and identifiers are English.
    After any change in `export/cii.py` run `tests/test_schematron.py`; CII element
    order follows the XSD. When the official rules catch something new, also add a
    German pre-check with a `field` in `validation.py` so the form can mark it.
+   Mandatory fields ("*" in the form) come from `validation.required_fields`
+   (returned by `/api/validate`); a new "field empty" error there must be added
+   to it – `tests/test_required_fields.py` checks both directions.
 9. **Every endpoint is behind login** (`app/auth.py`): `current_user` for
    normal work, `require_admin` for users/settings/audit (`app/admin.py`).
    New endpoints must take one of these dependencies; only `/api/health` and

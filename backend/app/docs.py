@@ -51,7 +51,10 @@ DESCRIPTIONS: dict[str, str] = {
     "company": "Eigene Firmendaten (Verkäufer) für neue Rechnungen.",
     "extract_pdf": "PDF hochladen und Rechnungsfelder erkennen (Scans über OCR).",
     "import_idoc": "SAP-INVOIC02-IDoc (XML) einlesen.",
-    "validate_invoice": "Rechnung prüfen (EN 16931, XRechnung) und Summen berechnen.",
+    "validate_invoice": (
+        "Rechnung prüfen (Vorprüfung, XSD, offizielle Schematron-Regeln), Summen berechnen "
+        "und die Pflichtfelder für Rechnung und Format liefern (im Formular mit * markiert)."
+    ),
     "export_zugferd": "ZUGFeRD-PDF erzeugen und archivieren (nur wenn gültig, sonst 422).",
     "export_xrechnung": "XRechnung-XML erzeugen und archivieren (nur wenn gültig, sonst 422).",
     "search_customers": "Käufer-Adressbuch durchsuchen (Name, Kundennummer).",

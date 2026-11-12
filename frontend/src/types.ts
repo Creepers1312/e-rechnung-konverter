@@ -107,6 +107,8 @@ export interface Totals {
 export interface ValidateResponse {
   totals: Totals;
   issues: Issue[];
+  /** mandatory form fields for this invoice and profile ("lines.0.name", "buyer.vat_id", ...) */
+  required: string[];
 }
 
 export interface ArchivedDocument {

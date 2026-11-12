@@ -36,7 +36,7 @@ from .ocr import text_of_pdf
 from .recognize import recognize_pdf
 from .settings import company_for_invoice, get_companies, get_company
 from .stats import router as stats_router
-from .validation import Issue, StatedTotals, validate
+from .validation import Issue, StatedTotals, required_fields, validate
 from .worker import STATUS_KEY
 
 MAX_UPLOAD = 20 * 1024 * 1024
@@ -66,6 +66,7 @@ class ValidateRequest(BaseModel):
 class ValidateResponse(BaseModel):
     totals: Totals
     issues: list[Issue]
+    required: list[str] = []  # mandatory form fields for this invoice and profile (marked "*")
 
 
 class DocumentInfo(BaseModel):
@@ -261,7 +262,9 @@ def validate_invoice(req: ValidateRequest, _: User = Depends(current_user)) -> V
     issues = validate(req.invoice, req.profile, req.stated_totals)
     if not any(i.severity == "error" for i in issues):  # official rules only make sense on a complete invoice
         issues += check_xml(build_cii(req.invoice, req.profile), req.profile)
-    return ValidateResponse(totals=compute_totals(req.invoice), issues=issues)
+    return ValidateResponse(
+        totals=compute_totals(req.invoice), issues=issues, required=required_fields(req.invoice, req.profile)
+    )
 
 
 @app.post("/api/export/xrechnung")

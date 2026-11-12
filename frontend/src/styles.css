@@ -176,6 +176,8 @@ details[open] summary { margin-bottom: 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; }
 .field { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: var(--text); }
 .field.wide { grid-column: 1 / -1; }
+abbr.req { color: var(--error); text-decoration: none; margin-left: 2px; cursor: help; }
+.required-legend { margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); }
 input, select {
   font: inherit; font-size: 0.95rem; font-weight: 400; color: var(--text); background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--radius-md); min-height: 36px; padding: 6px 10px; width: 100%;
